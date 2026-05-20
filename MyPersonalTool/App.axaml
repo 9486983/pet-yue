@@ -1,0 +1,34 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MyPersonalTool.App"
+             RequestedThemeVariant="Dark">
+
+  <Application.Styles>
+    <!-- Fluent 主题（暗色） -->
+    <FluentTheme />
+
+    <!-- 全局 ScrollViewer 样式 -->
+    <Style Selector="ScrollViewer">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <!-- 全局 TextBox 样式 -->
+    <Style Selector="TextBox">
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="FontSize" Value="13" />
+    </Style>
+
+    <!-- Expander 全局样式（深色主题） -->
+    <Style Selector="Expander">
+      <Setter Property="Background" Value="#252540" />
+      <Setter Property="CornerRadius" Value="14" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="Expander /template/ ToggleButton#ExpanderToggleButton">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+  </Application.Styles>
+</Application>
