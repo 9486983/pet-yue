@@ -31,13 +31,20 @@ public partial class App : Application
             var healthService = new HealthReminderService(configService, dispatcher);
             var config = configService.Config;
 
+            // ── 加载插件 ──
+            var pluginHost = new PluginHostImpl(configService);
+            var pluginLoader = new PluginLoader();
+            pluginLoader.LoadFromDirectory(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins"));
+            _ = pluginLoader.InitializeAllAsync(pluginHost);
+
             // ── 主设置窗口（创建但不自动显示） ──
-            var mainVm = new MainViewModel(configService, dispatcher);
+            var mainVm = new MainViewModel(configService, dispatcher, pluginLoader);
             var mainWindow = new MainWindow { DataContext = mainVm };
             SettingsWindow = mainWindow;
 
             // ── 宠物窗作为应用主窗口 ──
-            var petVm = new PetViewModel(configService, dispatcher, petdexService, activityMonitor, healthService);
+            var petVm = new PetViewModel(configService, dispatcher, petdexService,
+                activityMonitor, healthService, pluginHost.PluginActions);
             PetViewModel = petVm;
             var petWindow = new PetWindow
             {

@@ -2,11 +2,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MyPersonalTool.Core\MyPersonalTool.Core.csproj" />
-    <ProjectReference Include="..\MyPersonalTool.Sdk\MyPersonalTool.Sdk.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.Win32.SystemEvents" Version="9.0.0" />
   </ItemGroup>
 
   <PropertyGroup>

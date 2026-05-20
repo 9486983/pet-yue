@@ -77,7 +77,8 @@ public partial class PetViewModel : ObservableObject
 
     public PetViewModel(IConfigService configService, IDispatcherService dispatcher,
         IPetdexService petdexService, IActivityMonitor? activityMonitor = null,
-        HealthReminderService? healthService = null)
+        HealthReminderService? healthService = null,
+        List<PetActionConfig>? pluginActions = null)
     {
         _configService = configService;
         _dispatcher = dispatcher;
@@ -94,6 +95,14 @@ public partial class PetViewModel : ObservableObject
         _petName = string.IsNullOrEmpty(cfg.PetName) && CurrentPet != null
             ? CurrentPet.Name
             : cfg.PetName;
+
+        // 合并插件注册的动作
+        if (pluginActions != null && pluginActions.Count > 0)
+        {
+            var merged = new List<PetActionConfig>(Actions);
+            merged.AddRange(pluginActions);
+            Actions = merged;
+        }
 
         // 启动 Agent 监测
         if (activityMonitor != null)

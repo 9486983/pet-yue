@@ -32,3 +32,6 @@ appsettings.Development.json
 
 ## Claude
 .claude/
+
+## Plugins
+plugins/*.dll

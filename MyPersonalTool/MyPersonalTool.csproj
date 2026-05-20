@@ -23,5 +23,6 @@
     <ProjectReference Include="..\MyPersonalTool.Core\MyPersonalTool.Core.csproj" />
     <ProjectReference Include="..\MyPersonalTool.Services\MyPersonalTool.Services.csproj" />
     <ProjectReference Include="..\MyPersonalTool.ViewModels\MyPersonalTool.ViewModels.csproj" />
+    <ProjectReference Include="..\MyPersonalTool.Sdk\MyPersonalTool.Sdk.csproj" />
   </ItemGroup>
 </Project>

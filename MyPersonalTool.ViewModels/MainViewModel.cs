@@ -14,7 +14,11 @@ public partial class MainViewModel : ObservableObject
     public Action<bool>? TogglePetCallback { get; set; }
     public Action? ToggleFullscreenCallback { get; set; }
 
-    public MainViewModel(IConfigService configService, IDispatcherService dispatcher)
+    /// <summary>已加载的插件信息（只读展示用）</summary>
+    public List<PluginInfo> LoadedPlugins { get; } = new();
+
+    public MainViewModel(IConfigService configService, IDispatcherService dispatcher,
+        Services.PluginLoader? pluginLoader = null)
     {
         _configService = configService;
         _dispatcher = dispatcher;
@@ -25,6 +29,13 @@ public partial class MainViewModel : ObservableObject
         _sitInterval = h.SitIntervalMinutes;
         _eyeInterval = h.EyeIntervalMinutes;
         _drinkInterval = h.DrinkIntervalMinutes;
+
+        // 填充插件信息
+        if (pluginLoader != null)
+        {
+            foreach (var p in pluginLoader.Plugins)
+                LoadedPlugins.Add(new PluginInfo { Name = p.Name, Version = p.Version, Description = p.Description });
+        }
     }
 
     [ObservableProperty]
