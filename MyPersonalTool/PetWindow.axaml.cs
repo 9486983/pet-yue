@@ -74,23 +74,19 @@ public partial class PetWindow : Window
         Dispatcher.UIThread.Post(() =>
         {
             var topY = PetSprite.ContentTopY;
-            if (topY < 0) return; // 全空白，不调整
+            if (topY < 0)
+            {
+                // 无有效检测 → 恢复默认偏移
+                BubblePopup.VerticalOffset = -8;
+                return;
+            }
 
-            // 宠物框（100x100）、精灵（80x80）居中
-            const double petBodySize = 100;
-            const double spriteDisplaySize = 80;
-            const double baseGap = 6; // 气泡与可见内容的最小间距
+            // 精灵显示在 80×80，帧高度经缩放后，算出帧顶部空白占用了多少显示像素
+            var scale = 80.0 / PetSprite.FrameHeight;
+            var extraBlankInDisplay = topY * scale;
 
-            // 从精灵顶部到 PetBody 顶部的距离
-            var padding = (petBodySize - spriteDisplaySize) / 2;
-
-            // 帧中点 -> 显示中点 (缩放比例)
-            var scale = spriteDisplaySize / PetSprite.FrameHeight;
-            var visibleTopInDisplay = topY * scale; // 可见内容距精灵顶部的显示像素
-            var fromBodyTop = padding + visibleTopInDisplay; // 可见内容距 PetBody 顶部
-
-            // 气泡应在可见内容上方 baseGap px
-            BubblePopup.VerticalOffset = -(baseGap + fromBodyTop);
+            // 把气泡下移「额外空白」的距离，但不超过 PetBody 顶部 (offset ≤ 0)
+            BubblePopup.VerticalOffset = Math.Min(-8 + extraBlankInDisplay, 0);
         }, DispatcherPriority.Loaded);
     }
 
@@ -241,10 +237,7 @@ public partial class PetWindow : Window
         if (_vm == null) return;
 
         IReadOnlyList<IStorageItem>? items = null;
-        try
-        {
-            items = e.DataTransfer?.TryGetFiles();
-        }
+        try { items = e.DataTransfer?.TryGetFiles(); }
         catch { }
 
         if (items == null || items.Count == 0) return;
