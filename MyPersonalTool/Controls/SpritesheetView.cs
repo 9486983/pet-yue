@@ -85,6 +85,9 @@ public class SpritesheetView : Control
         }
     }
 
+    /// <summary>第一帧中第一行非空白像素在帧坐标系中的 Y 坐标</summary>
+    public int ContentTopY { get; private set; } = -1;
+
     // ── 构造 ──
 
     public SpritesheetView()
@@ -183,6 +186,27 @@ public class SpritesheetView : Control
 
         _frames = allFrameBitmaps;
         _framesPerRow = rowFrameCounts;
+
+        // 检测第一帧（空闲帧）的可见内容顶部 Y
+        ContentTopY = FindContentTopY(src, 0, 0, fw, fh);
+    }
+
+    /// <summary>检测帧中首个非空白行的 Y 坐标（帧坐标系）</summary>
+    private static int FindContentTopY(SKBitmap src, int col, int row, int fw, int fh)
+    {
+        using var frame = new SKBitmap(fw, fh);
+        src.ExtractSubset(frame, new SKRectI(col * fw, row * fh, (col + 1) * fw, (row + 1) * fh));
+
+        var step = Math.Max(1, fh / 20); // 隔行采样加速
+        for (var y = 0; y < fh; y += step)
+        {
+            for (var x = 0; x < fw; x += Math.Max(1, fw / 10))
+            {
+                if (frame.GetPixel(x, y).Alpha > 30)
+                    return y;
+            }
+        }
+        return -1; // 全空白
     }
 
     /// <summary>检查 SKBitmap 中是否有非透明像素</summary>

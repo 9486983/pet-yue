@@ -46,9 +46,12 @@ public partial class PetWindow : Window
             {
                 if (args.PropertyName == nameof(PetViewModel.AnimFrameDurationMs))
                     SyncFrameDuration(_vm.AnimFrameDurationMs);
+                else if (args.PropertyName == nameof(PetViewModel.SpritesheetPath))
+                    UpdateBubbleOffset();
             };
 
             Dispatcher.UIThread.Post(() => AdjustSize());
+            Dispatcher.UIThread.Post(() => UpdateBubbleOffset(), DispatcherPriority.Loaded);
         }
     }
 
@@ -62,6 +65,33 @@ public partial class PetWindow : Window
         // 根据宠物表情调整窗口大小
         Width = 120;
         Height = 120;
+    }
+
+    /// <summary>根据宠物实际可见内容高度调整气泡偏移</summary>
+    private void UpdateBubbleOffset()
+    {
+        // 等 SpritesheetView 完成帧提取
+        Dispatcher.UIThread.Post(() =>
+        {
+            var topY = PetSprite.ContentTopY;
+            if (topY < 0) return; // 全空白，不调整
+
+            // 宠物框（100x100）、精灵（80x80）居中
+            const double petBodySize = 100;
+            const double spriteDisplaySize = 80;
+            const double baseGap = 6; // 气泡与可见内容的最小间距
+
+            // 从精灵顶部到 PetBody 顶部的距离
+            var padding = (petBodySize - spriteDisplaySize) / 2;
+
+            // 帧中点 -> 显示中点 (缩放比例)
+            var scale = spriteDisplaySize / PetSprite.FrameHeight;
+            var visibleTopInDisplay = topY * scale; // 可见内容距精灵顶部的显示像素
+            var fromBodyTop = padding + visibleTopInDisplay; // 可见内容距 PetBody 顶部
+
+            // 气泡应在可见内容上方 baseGap px
+            BubblePopup.VerticalOffset = -(baseGap + fromBodyTop);
+        }, DispatcherPriority.Loaded);
     }
 
     // ── 拖动 ──
