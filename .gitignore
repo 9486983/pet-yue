@@ -18,6 +18,7 @@ obj/
 *.swp
 *.swo
 *~
+*.bak
 
 ## OS
 Thumbs.db

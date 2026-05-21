@@ -17,6 +17,14 @@ public partial class PetdexDialog : Window
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".petdex", "thumbs");
 
+    /// <summary>获取当前主题色（带 fallback）</summary>
+    private static SolidColorBrush ThemeBrush(string resourceKey, uint fallbackHex = 0xFFFFFFFF)
+    {
+        if (Application.Current?.TryFindResource(resourceKey, out var value) == true && value is Color c)
+            return new SolidColorBrush(c);
+        return new SolidColorBrush(Color.Parse($"#{fallbackHex:X8}"));
+    }
+
     public PetdexDialog()
     {
         InitializeComponent();
@@ -143,12 +151,16 @@ public partial class PetdexDialog : Window
 
     private Border CreatePetCard(PetDefinition pet)
     {
+        var bgCard = ThemeBrush("BgCard", 0xFF252540);
+        var bgHover = ThemeBrush("BgHover", 0xFF3D3D5C);
+        var textPrimary = ThemeBrush("TextPrimary", 0xFFFFFFFF);
+
         var border = new Border
         {
             Width = 100,
             Height = 110,
             CornerRadius = new CornerRadius(12),
-            Background = new SolidColorBrush(Color.Parse("#252540")),
+            Background = bgCard,
             Margin = new Thickness(4),
             Cursor = new Cursor(StandardCursorType.Hand),
         };
@@ -190,7 +202,7 @@ public partial class PetdexDialog : Window
         {
             Text = pet.Name,
             FontSize = 12,
-            Foreground = new SolidColorBrush(Colors.White),
+            Foreground = textPrimary,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             Margin = new Thickness(0, 4, 0, 0),
         };
@@ -198,9 +210,9 @@ public partial class PetdexDialog : Window
         border.Child = stack;
 
         border.PointerEntered += (_, _) =>
-            border.Background = new SolidColorBrush(Color.Parse("#3D3D5C"));
+            border.Background = bgHover;
         border.PointerExited += (_, _) =>
-            border.Background = new SolidColorBrush(Color.Parse("#252540"));
+            border.Background = bgCard;
         border.PointerPressed += (_, _) =>
         {
             _vm?.SelectPetCommand.Execute(pet);

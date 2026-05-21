@@ -48,11 +48,13 @@ public partial class PetViewModel : ObservableObject
     private string _currentReaction = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAnyBubbleVisible))]
     private bool _isReacting;
 
     // ── Agent 对话监测气泡 ──
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsAnyBubbleVisible))]
     private bool _isShowingThought;
 
     [ObservableProperty]
@@ -60,6 +62,9 @@ public partial class PetViewModel : ObservableObject
 
     [ObservableProperty]
     private string _thoughtAssistant = "";
+
+    /// <summary>任一气泡可见（统一外部 Popup 绑定）</summary>
+    public bool IsAnyBubbleVisible => IsReacting || IsShowingThought;
 
     /// <summary>当前宠物定义</summary>
     public PetDefinition? CurrentPet { get; private set; }
@@ -281,7 +286,7 @@ public partial class PetViewModel : ObservableObject
         _dispatcher.Post(() => AnimCurrentRow = 0);
     }
 
-    private void ShowReaction(string reaction)
+    public void ShowReaction(string reaction)
     {
         _dispatcher.Post(() =>
         {
@@ -290,6 +295,19 @@ public partial class PetViewModel : ObservableObject
         });
         Task.Delay(2000).ContinueWith(_ =>
             _dispatcher.Post(() => IsReacting = false));
+    }
+
+    /// <summary>在对话气泡中显示文件拖放信息</summary>
+    public void ShowFileDropInfo(string title, string info)
+    {
+        _dispatcher.Post(() =>
+        {
+            ThoughtAssistant = title;
+            ThoughtText = info;
+            IsShowingThought = true;
+        });
+        Task.Delay(8000).ContinueWith(_ =>
+            _dispatcher.Post(() => IsShowingThought = false));
     }
 
     public void Cleanup()

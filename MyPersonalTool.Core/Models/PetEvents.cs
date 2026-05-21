@@ -7,4 +7,9 @@ public static class PetEvents
     public static event Action? ConfigSaved;
 
     public static void NotifyConfigSaved() => ConfigSaved?.Invoke();
+
+    /// <summary>主题切换（传 true=深色, false=浅色）</summary>
+    public static event Action<bool>? ThemeChanged;
+
+    public static void NotifyThemeChanged(bool isDark) => ThemeChanged?.Invoke(isDark);
 }

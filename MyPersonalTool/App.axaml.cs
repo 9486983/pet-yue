@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
 using MyPersonalTool.Services;
 using MyPersonalTool.ViewModels;
 
@@ -9,11 +10,11 @@ namespace MyPersonalTool;
 
 public partial class App : Application
 {
-    /// <summary>主设置窗口引用，供宠物窗右键菜单打开</summary>
     public static Window? SettingsWindow { get; private set; }
-
-    /// <summary>宠物 ViewModel，供 MainViewModel 跨窗口同步配置</summary>
     public static PetViewModel? PetViewModel { get; private set; }
+
+    private static readonly Uri DarkThemeUri = new("avares://MyPersonalTool/Styles/Themes/Dark.axaml");
+    private static readonly Uri LightThemeUri = new("avares://MyPersonalTool/Styles/Themes/Light.axaml");
 
     public override void Initialize()
     {
@@ -31,18 +32,25 @@ public partial class App : Application
             var healthService = new HealthReminderService(configService, dispatcher);
             var config = configService.Config;
 
+            // ── 加载主题资源 ──
+            LoadThemeResources(config.IsDarkTheme);
+
+            // ── 监听主题切换 ──
+            Core.Models.PetEvents.ThemeChanged += isDark =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => LoadThemeResources(isDark));
+
             // ── 加载插件 ──
             var pluginHost = new PluginHostImpl(configService);
             var pluginLoader = new PluginLoader();
             pluginLoader.LoadFromDirectory(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins"));
             _ = pluginLoader.InitializeAllAsync(pluginHost);
 
-            // ── 主设置窗口（创建但不自动显示） ──
+            // ── 主设置窗口 ──
             var mainVm = new MainViewModel(configService, dispatcher, pluginLoader);
             var mainWindow = new MainWindow { DataContext = mainVm };
             SettingsWindow = mainWindow;
 
-            // ── 宠物窗作为应用主窗口 ──
+            // ── 宠物窗作为主窗口 ──
             var petVm = new PetViewModel(configService, dispatcher, petdexService,
                 activityMonitor, healthService, pluginHost.PluginActions);
             PetViewModel = petVm;
@@ -56,5 +64,19 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>加载主题资源 + 设置 Fluent 主题</summary>
+    private void LoadThemeResources(bool isDark)
+    {
+        RequestedThemeVariant = isDark ? ThemeVariant.Dark : ThemeVariant.Light;
+
+        // 移除旧主题资源
+        Resources.MergedDictionaries.Clear();
+
+        // 加载新主题颜色资源
+        var uri = isDark ? DarkThemeUri : LightThemeUri;
+        Resources.MergedDictionaries.Add(
+            (ResourceDictionary)AvaloniaXamlLoader.Load(uri));
     }
 }

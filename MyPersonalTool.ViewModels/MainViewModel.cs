@@ -29,6 +29,8 @@ public partial class MainViewModel : ObservableObject
         _sitInterval = h.SitIntervalMinutes;
         _eyeInterval = h.EyeIntervalMinutes;
         _drinkInterval = h.DrinkIntervalMinutes;
+        _isDarkTheme = configService.Config.IsDarkTheme;
+        _config.IsDarkTheme = _isDarkTheme;
 
         // 填充插件信息
         if (pluginLoader != null)
@@ -47,8 +49,16 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isPetVisible;
 
+    /// <summary>深色模式开关（即时生效）</summary>
     [ObservableProperty]
     private bool _isDarkTheme = true;
+
+    partial void OnIsDarkThemeChanged(bool value)
+    {
+        Config.IsDarkTheme = value;
+        _configService.Save();
+        PetEvents.NotifyThemeChanged(value);
+    }
 
     // ── 动画速度 ──
 

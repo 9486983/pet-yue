@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using MyPersonalTool.ViewModels;
 using MyPersonalTool.Views;
@@ -101,6 +102,14 @@ public partial class PetWindow : Window
 
     // ── 右键菜单（宠物动作） ──
 
+    /// <summary>获取当前主题色（带 fallback）</summary>
+    private static SolidColorBrush ThemeBrush(string resourceKey, uint fallbackHex = 0xFFFFFFFF)
+    {
+        if (Application.Current?.TryFindResource(resourceKey, out var value) == true && value is Color c)
+            return new SolidColorBrush(c);
+        return new SolidColorBrush(Color.Parse($"#{fallbackHex:X8}"));
+    }
+
     private void OnPetContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (_vm == null) return;
@@ -112,7 +121,7 @@ public partial class PetWindow : Window
         {
             Header = "📖 宠物图鉴",
             FontSize = 13,
-            Foreground = new SolidColorBrush(Colors.White),
+            Foreground = ThemeBrush("TextPrimary"),
         };
         dexItem.Click += (_, _) => OpenPetdex();
         menu.Items.Add(dexItem);
@@ -126,7 +135,7 @@ public partial class PetWindow : Window
             {
                 Header = $"{action.Emoji} {action.Name}",
                 FontSize = 13,
-                Foreground = new SolidColorBrush(Colors.White),
+                Foreground = ThemeBrush("TextPrimary"),
             };
             ToolTip.SetTip(item, action.Description);
             var captured = action;
@@ -141,7 +150,7 @@ public partial class PetWindow : Window
         {
             Header = "⚙️ 打开设置",
             FontSize = 13,
-            Foreground = new SolidColorBrush(Colors.White),
+            Foreground = ThemeBrush("TextPrimary"),
         };
         settingsItem.Click += (_, _) =>
         {
@@ -183,6 +192,68 @@ public partial class PetWindow : Window
     }
 
     // ── 保存位置 ──
+
+    // ── 文件拖放 ──
+
+    private void OnDragEnter(object? sender, DragEventArgs e)
+    {
+        _vm?.ShowReaction("😮");
+        e.DragEffects = DragDropEffects.Copy;
+    }
+
+    private void OnDragLeave(object? sender, DragEventArgs e)
+    {
+        _vm?.ShowReaction("👋");
+    }
+
+    private void OnDrop(object? sender, DragEventArgs e)
+    {
+        if (_vm == null) return;
+
+        IReadOnlyList<IStorageItem>? items = null;
+        try
+        {
+            items = e.DataTransfer?.TryGetFiles();
+        }
+        catch { }
+
+        if (items == null || items.Count == 0) return;
+
+        var sb = new System.Text.StringBuilder();
+        foreach (var item in items)
+        {
+            try
+            {
+                var path = item.Path.LocalPath;
+                var fi = new FileInfo(path);
+                if (!fi.Exists) continue;
+
+                var size = FormatSize(fi.Length);
+                var time = fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm");
+                sb.AppendLine($"📄 {fi.Name}");
+                sb.AppendLine($"  大小 {size} · {time}");
+            }
+            catch { sb.AppendLine($"⚠️ 无法读取文件信息"); }
+        }
+
+        if (sb.Length > 0)
+        {
+            _vm.ShowFileDropInfo("📁 文件拖放", sb.ToString().TrimEnd());
+            _vm.ShowReaction("📂");
+        }
+    }
+
+    /// <summary>格式化文件大小</summary>
+    private static string FormatSize(long bytes)
+    {
+        return bytes switch
+        {
+            < 1024 => $"{bytes} B",
+            < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+            < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+            _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
+        };
+    }
 
     protected override void OnClosing(WindowClosingEventArgs e)
     {

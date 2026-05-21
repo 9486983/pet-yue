@@ -14,56 +14,45 @@
         TransparencyLevelHint="Transparent"
         PointerPressed="OnWindowPointerPressed">
 
-  <Grid>
-    <!-- AI 对话气泡 -->
-    <Border CornerRadius="12"
-            Background="#CC2D2D3F"
-            BorderBrush="#3D3D5C"
-            BorderThickness="1"
-            Padding="10,8"
-            MaxWidth="220"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Top"
-            Margin="0,4,0,0"
-            IsVisible="{Binding IsShowingThought}">
-      <Grid RowDefinitions="Auto,Auto">
-        <Grid ColumnDefinitions="Auto,*">
-          <TextBlock Text="💬" FontSize="12" VerticalAlignment="Center" />
-          <TextBlock Text="{Binding ThoughtAssistant}"
-                     FontSize="10" FontWeight="Bold"
-                     Foreground="#AAAAAA" Margin="4,0,0,0"
-                     VerticalAlignment="Center" />
-        </Grid>
-        <TextBlock Grid.Row="1" Text="{Binding ThoughtText}"
-                   FontSize="11" Foreground="White"
-                   TextWrapping="Wrap" MaxHeight="60" Margin="0,4,0,0" />
-      </Grid>
-    </Border>
-
-    <!-- 独立弹出式反应气泡（Popup 窗口，不占宠物窗布局） -->
-    <Popup x:Name="ReactionPopup"
+  <Grid DragDrop.AllowDrop="True"
+        DragDrop.DragEnter="OnDragEnter"
+        DragDrop.DragLeave="OnDragLeave"
+        DragDrop.Drop="OnDrop">
+    <!-- 统一外部气泡（替代内部气泡 + 旧 Popup） -->
+    <Popup x:Name="BubblePopup"
            Placement="Top"
            PlacementTarget="{Binding ElementName=PetBody}"
-           IsOpen="{Binding IsReacting}"
+           IsOpen="{Binding IsAnyBubbleVisible}"
            HorizontalOffset="0"
            VerticalOffset="-8"
            WindowManagerAddShadowHint="False">
-      <Border Background="White"
-              BorderBrush="Black"
-              BorderThickness="2"
+      <Border Background="{DynamicResource BgOverlay}"
+              BorderBrush="{DynamicResource BorderColor}"
+              BorderThickness="1"
               CornerRadius="12"
-              Padding="14,8">
+              Padding="14,8"
+              MaxWidth="220">
         <StackPanel>
+          <!-- Reaction 模式：大号 emoji -->
           <TextBlock Text="{Binding CurrentReaction}"
                      FontSize="22"
                      HorizontalAlignment="Center"
-                     Foreground="Black" />
-          <Path Data="M 0,0 L 8,8 L 16,0 Z"
-                Fill="White"
-                Stroke="Black"
-                StrokeThickness="1"
-                HorizontalAlignment="Center"
-                Margin="0,-1,0,0" />
+                     IsVisible="{Binding IsReacting}" />
+          <!-- Thought 模式：助理名 + 文字 -->
+          <Grid IsVisible="{Binding IsShowingThought}">
+            <Grid RowDefinitions="Auto,Auto">
+              <Grid ColumnDefinitions="Auto,*">
+                <TextBlock Text="💬" FontSize="12" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding ThoughtAssistant}"
+                           FontSize="10" FontWeight="Bold"
+                           Foreground="#AAAAAA" Margin="4,0,0,0"
+                           VerticalAlignment="Center" />
+              </Grid>
+              <TextBlock Grid.Row="1" Text="{Binding ThoughtText}"
+                         FontSize="11" Foreground="{DynamicResource TextPrimary}"
+                         TextWrapping="Wrap" MaxHeight="60" Margin="0,4,0,0" />
+            </Grid>
+          </Grid>
         </StackPanel>
       </Border>
     </Popup>

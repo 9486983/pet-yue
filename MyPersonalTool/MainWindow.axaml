@@ -11,49 +11,54 @@
         MinHeight="500"
         WindowStartupLocation="CenterScreen"
         WindowDecorations="None"
-        TransparencyLevelHint="AcrylicBlur">
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
 
-  <Border CornerRadius="12" BorderThickness="1" BorderBrush="#2D2D3F">
+  <Border CornerRadius="20" BorderThickness="1" BorderBrush="{DynamicResource BorderColor}"
+          Background="{DynamicResource BgPage}">
     <Grid RowDefinitions="50,*,60">
-      <!-- 标题栏 -->
-      <Border Background="#CC2D2D3F"
+      <!-- 标题栏（圆角与外层 Border 一致 20px） -->
+      <Border Background="{DynamicResource BgOverlay}"
               BoxShadow="0 2 8 #1A000000"
               PointerPressed="TitleBar_OnPointerPressed"
-              CornerRadius="12,12,0,0">
+              CornerRadius="20,20,0,0">
         <Grid ColumnDefinitions="*,Auto,Auto,Auto">
           <TextBlock Text="My Personal Tool"
                      FontSize="16"
                      FontWeight="SemiBold"
                      VerticalAlignment="Center"
                      Margin="16,0"
-                     Foreground="White" />
+                     Foreground="{DynamicResource TextPrimary}" />
 
           <Button x:Name="MinimizeBtn"
+                  Classes="flat"
                   Grid.Column="1"
                   Content="─"
                   Width="46" Height="32"
                   FontSize="14"
-                  Foreground="White"
+                  Foreground="{DynamicResource TextPrimary}"
                   Background="Transparent"
                   BorderThickness="0"
                   Cursor="Hand"
                   CornerRadius="0" />
           <Button x:Name="MaximizeBtn"
+                  Classes="flat"
                   Grid.Column="2"
                   Content="⛶"
                   Width="46" Height="32"
                   FontSize="14"
-                  Foreground="White"
+                  Foreground="{DynamicResource TextPrimary}"
                   Background="Transparent"
                   BorderThickness="0"
                   Cursor="Hand"
                   CornerRadius="0" />
           <Button x:Name="CloseBtn"
+                  Classes="flat"
                   Grid.Column="3"
                   Content="✕"
                   Width="46" Height="32"
                   FontSize="14"
-                  Foreground="White"
+                  Foreground="{DynamicResource TextPrimary}"
                   Background="Transparent"
                   BorderThickness="0"
                   Cursor="Hand"
@@ -62,7 +67,7 @@
       </Border>
 
       <!-- 内容区域 -->
-      <Grid Grid.Row="1" Background="#CC1A1A2E">
+      <Grid Grid.Row="1">
         <ScrollViewer IsVisible="{Binding IsHomeSelected}">
           <views:HomePage Margin="16" />
         </ScrollViewer>
@@ -71,34 +76,36 @@
         </ScrollViewer>
       </Grid>
 
-      <!-- 底部导航 -->
+      <!-- 底部导航（圆角与外层 Border 一致 20px） -->
       <Border Grid.Row="2"
-              Background="#CC2D2D3F"
+              Background="{DynamicResource BgOverlay}"
               BoxShadow="0 -2 8 #1A000000"
-              CornerRadius="0,0,12,12">
+              CornerRadius="0,0,20,20">
         <Grid ColumnDefinitions="*,*">
-          <Button Command="{Binding GoToHomeCommand}"
-                  Background="Transparent"
-                  BorderThickness="0"
+          <Button Classes="nav"
+                  Command="{Binding GoToHomeCommand}"
                   Cursor="Hand"
-                  FontSize="13"
-                  CornerRadius="0">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                  HorizontalAlignment="Center"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center"
+                  Padding="16,0">
+            <StackPanel Spacing="2">
               <TextBlock Text="Home" FontSize="20" HorizontalAlignment="Center" />
-              <TextBlock Text="首页" FontSize="11" HorizontalAlignment="Center" Foreground="#CCFFFFFF" />
+              <TextBlock Text="首页" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
             </StackPanel>
           </Button>
 
-          <Button Grid.Column="1"
+          <Button Classes="nav"
+                  Grid.Column="1"
                   Command="{Binding GoToSettingsCommand}"
-                  Background="Transparent"
-                  BorderThickness="0"
                   Cursor="Hand"
-                  FontSize="13"
-                  CornerRadius="0">
-            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                  HorizontalAlignment="Center"
+                  HorizontalContentAlignment="Center"
+                  VerticalContentAlignment="Center"
+                  Padding="16,0">
+            <StackPanel Spacing="2">
               <TextBlock Text="Settings" FontSize="20" HorizontalAlignment="Center" />
-              <TextBlock Text="设置" FontSize="11" HorizontalAlignment="Center" Foreground="#CCFFFFFF" />
+              <TextBlock Text="设置" FontSize="11" HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
             </StackPanel>
           </Button>
         </Grid>
