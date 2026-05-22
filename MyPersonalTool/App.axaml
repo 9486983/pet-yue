@@ -24,6 +24,8 @@
       <Setter Property="BorderThickness" Value="0,0,0,5" />
       <Setter Property="BorderBrush" Value="{DynamicResource Shadow3D}" />
       <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style Selector="Button:pointerover">
       <Setter Property="Background" Value="{DynamicResource AccentHover}" />
