@@ -25,7 +25,7 @@ public class FileRadialMenu : Window
 
     private const int TotalParts = 10;
     private const int ArcPosition = 0;
-    private const int ArcSpan = 3;
+    private const int ArcSpan = 5;
 
     private static double ArcAngle => ArcSpan * (2 * Math.PI / TotalParts);
     private static double ArcCenterAngle => -Math.PI / 2 + ArcPosition * (2 * Math.PI / TotalParts);
@@ -247,15 +247,15 @@ public class FileRadialMenu : Window
         return bestDist <= 55 * 55 ? best : -1;
     }
 
-    private static async Task<string[]> ReadFiles(DragEventArgs e)
+    private static Task<string[]> ReadFiles(DragEventArgs e)
     {
         try
         {
             var items = e.DataTransfer?.TryGetFiles();
-            if (items != null) return items.Select(i => i.Path.LocalPath).ToArray();
+            if (items != null) return Task.FromResult(items.Select(i => i.Path.LocalPath).ToArray());
         }
         catch { }
-        return [];
+        return Task.FromResult(Array.Empty<string>());
     }
 
     private async Task ExecuteAction(FileActionConfig action, string[] files)
