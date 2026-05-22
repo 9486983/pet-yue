@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\MyPersonalTool.Sdk\MyPersonalTool.Sdk.csproj" />
+    <ProjectReference Include="..\..\MyPersonalTool.Sdk\MyPersonalTool.Sdk.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -13,7 +13,7 @@
 
   <Target Name="CopyToPlugins" AfterTargets="Build" Condition="'$(Configuration)'=='Debug'">
     <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll"
-          DestinationFolder="..\MyPersonalTool\bin\Debug\net9.0\plugins" />
+          DestinationFolder="..\..\MyPersonalTool\bin\Debug\net9.0\plugins" />
   </Target>
 
 </Project>

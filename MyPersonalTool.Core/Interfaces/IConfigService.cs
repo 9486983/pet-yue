@@ -7,4 +7,10 @@ public interface IConfigService
 {
     AppConfig Config { get; }
     void Save();
+
+    /// <summary>插件读取配置值</summary>
+    string? GetPluginValue(string key);
+
+    /// <summary>插件写入配置值</summary>
+    void SetPluginValue(string key, string value);
 }

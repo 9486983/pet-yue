@@ -66,4 +66,16 @@ public class ConfigService : IConfigService
             System.Diagnostics.Debug.WriteLine($"保存配置失败: {ex.Message}");
         }
     }
+
+    public string? GetPluginValue(string key)
+    {
+        Config.PluginValues.TryGetValue(key, out var val);
+        return val;
+    }
+
+    public void SetPluginValue(string key, string value)
+    {
+        Config.PluginValues[key] = value;
+        Save();
+    }
 }

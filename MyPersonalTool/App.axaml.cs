@@ -60,6 +60,14 @@ public partial class App : Application
                 Position = new PixelPoint((int)config.PetWindowX, (int)config.PetWindowY),
             };
 
+            // ── 连接插件气泡回调 ──
+            pluginHost.OnShowThought = (title, text) =>
+                petVm.ShowFileDropInfo(title, text);
+
+            // ── 连接插件输入框回调 ──
+            pluginHost.OnShowInputDialog = async (title, placeholder, initial) =>
+                await Views.InputDialog.ShowAsync(petWindow, title, placeholder, initial);
+
             desktop.MainWindow = petWindow;
         }
 

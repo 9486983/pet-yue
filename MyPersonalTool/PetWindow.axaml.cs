@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using MyPersonalTool.Core.Models;
 using MyPersonalTool.ViewModels;
 using MyPersonalTool.Views;
 
@@ -154,19 +155,32 @@ public partial class PetWindow : Window
 
         menu.Items.Add(new Separator());
 
-        // 动作列表
-        foreach (var action in _vm.Actions)
+        // 动作列表（按 Group 分组为二级菜单）
+        var groups = _vm.Actions
+            .GroupBy(a => string.IsNullOrEmpty(a.Group) ? "" : a.Group)
+            .ToList();
+
+        foreach (var group in groups)
         {
-            var item = new MenuItem
+            if (string.IsNullOrEmpty(group.Key))
             {
-                Header = $"{action.Emoji} {action.Name}",
-                FontSize = 13,
-                Foreground = ThemeBrush("TextPrimary"),
-            };
-            ToolTip.SetTip(item, action.Description);
-            var captured = action;
-            item.Click += (_, _) => _vm.PerformActionCommand.Execute(captured);
-            menu.Items.Add(item);
+                // 无分组 → 直接添加到根菜单
+                foreach (var action in group)
+                    menu.Items.Add(BuildMenuItem(action));
+            }
+            else
+            {
+                // 有分组 → 创建二级菜单
+                var subMenu = new MenuItem
+                {
+                    Header = group.Key,
+                    FontSize = 13,
+                    Foreground = ThemeBrush("TextPrimary"),
+                };
+                foreach (var action in group)
+                    subMenu.Items.Add(BuildMenuItem(action));
+                menu.Items.Add(subMenu);
+            }
         }
 
         menu.Items.Add(new Separator());
@@ -276,6 +290,21 @@ public partial class PetWindow : Window
             < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
             _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
         };
+    }
+
+    /// <summary>构建右键菜单项</summary>
+    private MenuItem BuildMenuItem(PetActionConfig action)
+    {
+        var item = new MenuItem
+        {
+            Header = $"{action.Emoji} {action.Name}",
+            FontSize = 13,
+            Foreground = ThemeBrush("TextPrimary"),
+        };
+        ToolTip.SetTip(item, action.Description);
+        var captured = action;
+        item.Click += (_, _) => _vm?.PerformActionCommand.Execute(captured);
+        return item;
     }
 
     protected override void OnClosing(WindowClosingEventArgs e)

@@ -264,9 +264,20 @@ public partial class PetViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void PerformAction(PetActionConfig? action)
+    private async Task PerformAction(PetActionConfig? action)
     {
         if (action == null) return;
+
+        // 如果有异步回调，执行它（插件 API 查询等）
+        if (action.ActionCallback != null)
+        {
+            AnimCurrentRow = 4; // jumping
+            try { await action.ActionCallback(); }
+            catch (Exception ex) { ShowFileDropInfo("⚠️ 插件错误", ex.Message); }
+            ResetAnimRowAfterDelay();
+            return;
+        }
+
         ShowReaction(action.Reaction);
         AnimCurrentRow = 4; // jumping
         ResetAnimRowAfterDelay();
