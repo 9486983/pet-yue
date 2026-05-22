@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using MyPersonalTool.Services;
@@ -52,7 +53,8 @@ public partial class App : Application
 
             // ── 宠物窗作为主窗口 ──
             var petVm = new PetViewModel(configService, dispatcher, petdexService,
-                activityMonitor, healthService, pluginHost.PluginActions);
+                activityMonitor, healthService, pluginHost.PluginActions,
+                pluginHost.FileActions);
             PetViewModel = petVm;
             var petWindow = new PetWindow
             {
@@ -63,6 +65,23 @@ public partial class App : Application
             // ── 连接插件气泡回调 ──
             pluginHost.OnShowThought = (title, text) =>
                 petVm.ShowFileDropInfo(title, text);
+
+            // ── 连接剪贴板 ──
+            petVm.ClipboardSetText = text =>
+            {
+                try
+                {
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell",
+                        Arguments = $"-Command \"Set-Clipboard -Value '{text.Replace("'", "''")}'\"",
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    };
+                    System.Diagnostics.Process.Start(psi);
+                }
+                catch { }
+            };
 
             // ── 连接插件输入框回调 ──
             pluginHost.OnShowInputDialog = async (title, placeholder, initial) =>

@@ -80,16 +80,100 @@ public partial class PetViewModel : ObservableObject
         new() { Name = "摸摸", Emoji = "❤️", Reaction = "🥰", Description = "轻轻抚摸" },
     ];
 
+    /// <summary>文件拖放动作（径向菜单用）</summary>
+    public List<FileActionConfig> FileActions => _fileActions;
+    private readonly List<FileActionConfig> _fileActions = [];
+
+    /// <summary>剪贴板写入回调（由 UI 层设置）</summary>
+    public Action<string>? ClipboardSetText { get; set; }
+
+    private void LoadBuiltinFileActions()
+    {
+        _fileActions.Add(new FileActionConfig
+        {
+            Name = "查看信息",
+            Emoji = "📄",
+            Description = "查看文件名称、大小、修改时间",
+            ActionCallback = async (files) =>
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var f in files.Take(5))
+                {
+                    try
+                    {
+                        var fi = new FileInfo(f);
+                        var size = FormatFileSize(fi.Length);
+                        var time = fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm");
+                        sb.AppendLine($"📄 {fi.Name}");
+                        sb.AppendLine($"  大小 {size} · {time}");
+                    }
+                    catch { }
+                }
+                if (files.Length > 5)
+                    sb.AppendLine($"  …以及 {files.Length - 5} 个文件");
+                if (sb.Length > 0)
+                    ShowFileDropInfo("📁 文件信息", sb.ToString().TrimEnd());
+                ShowReaction("📂");
+            },
+        });
+        _fileActions.Add(new FileActionConfig
+        {
+            Name = "打开位置",
+            Emoji = "📂",
+            Description = "在资源管理器中打开文件所在文件夹",
+            ActionCallback = async (files) =>
+            {
+                if (files.Length > 0)
+                {
+                    var dir = Path.GetDirectoryName(files[0]);
+                    if (!string.IsNullOrEmpty(dir))
+                    {
+                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{files[0]}\"");
+                        ShowReaction("📂");
+                    }
+                }
+            },
+        });
+        _fileActions.Add(new FileActionConfig
+        {
+            Name = "复制路径",
+            Emoji = "📋",
+            Description = "复制文件完整路径到剪贴板",
+            ActionCallback = async (files) =>
+            {
+                if (files.Length > 0)
+                {
+                    ClipboardSetText?.Invoke(files[0]);
+                    ShowReaction("📋");
+                }
+            },
+        });
+    }
+
+    private static string FormatFileSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
+        < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
+        _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
+    };
+
     public PetViewModel(IConfigService configService, IDispatcherService dispatcher,
         IPetdexService petdexService, IActivityMonitor? activityMonitor = null,
         HealthReminderService? healthService = null,
-        List<PetActionConfig>? pluginActions = null)
+        List<PetActionConfig>? pluginActions = null,
+        List<FileActionConfig>? fileActions = null)
     {
         _configService = configService;
         _dispatcher = dispatcher;
         _petdexService = petdexService;
         _activityMonitor = activityMonitor;
         _healthService = healthService;
+
+        // 加载内置文件拖放动作
+        LoadBuiltinFileActions();
+        if (fileActions != null && fileActions.Count > 0)
+            _fileActions.AddRange(fileActions);
 
         // 扫描已安装宠物
         ReloadPetdexPets();

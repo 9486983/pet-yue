@@ -12,6 +12,9 @@ public class PluginHostImpl : IPluginHost
     /// <summary>插件注册的动作列表</summary>
     public List<PetActionConfig> PluginActions { get; } = new();
 
+    /// <summary>插件注册的文件拖放动作</summary>
+    public List<FileActionConfig> FileActions { get; } = new();
+
     /// <summary>显示气泡文字的 UI 回调（由 ViewModel 设置）</summary>
     public Action<string, string>? OnShowThought { get; set; }
 
@@ -53,6 +56,17 @@ public class PluginHostImpl : IPluginHost
             Description = description,
             Group = group,
             ActionCallback = callback,
+        });
+    }
+
+    public void RegisterFileAction(string name, string emoji, string description, Func<string[], Task> handler)
+    {
+        FileActions.Add(new FileActionConfig
+        {
+            Name = name,
+            Emoji = emoji,
+            Description = description,
+            ActionCallback = handler,
         });
     }
 

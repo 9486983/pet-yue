@@ -237,7 +237,22 @@ public partial class PetWindow : Window
 
     private void OnDragEnter(object? sender, DragEventArgs e)
     {
-        _vm?.ShowReaction("😮");
+        if (_vm == null) return;
+        e.DragEffects = DragDropEffects.Copy;
+
+        if (_vm.FileActions.Count > 0)
+        {
+            var bodyBounds = PetBody.Bounds;
+            var bodyCenterInWindow = new Point(
+                bodyBounds.X + bodyBounds.Width / 2,
+                bodyBounds.Y + bodyBounds.Height / 2);
+            var screenPt = this.PointToScreen(bodyCenterInWindow);
+            Views.FileRadialMenu.ShowDuringDrag(this, _vm.FileActions, screenPt);
+        }
+    }
+
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
         e.DragEffects = DragDropEffects.Copy;
     }
 
@@ -248,36 +263,7 @@ public partial class PetWindow : Window
 
     private void OnDrop(object? sender, DragEventArgs e)
     {
-        if (_vm == null) return;
-
-        IReadOnlyList<IStorageItem>? items = null;
-        try { items = e.DataTransfer?.TryGetFiles(); }
-        catch { }
-
-        if (items == null || items.Count == 0) return;
-
-        var sb = new System.Text.StringBuilder();
-        foreach (var item in items)
-        {
-            try
-            {
-                var path = item.Path.LocalPath;
-                var fi = new FileInfo(path);
-                if (!fi.Exists) continue;
-
-                var size = FormatSize(fi.Length);
-                var time = fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm");
-                sb.AppendLine($"📄 {fi.Name}");
-                sb.AppendLine($"  大小 {size} · {time}");
-            }
-            catch { sb.AppendLine($"⚠️ 无法读取文件信息"); }
-        }
-
-        if (sb.Length > 0)
-        {
-            _vm.ShowFileDropInfo("📁 文件拖放", sb.ToString().TrimEnd());
-            _vm.ShowReaction("📂");
-        }
+        // 菜单已接管拖放，此处不再处理
     }
 
     /// <summary>格式化文件大小</summary>
