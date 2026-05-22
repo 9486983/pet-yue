@@ -9,16 +9,16 @@ public class PluginHostImpl : IPluginHost
 {
     private readonly IConfigService _config;
 
-    /// <summary>插件注册的动作列表</summary>
+    /// <summary>插件注册的动作（右键菜单）</summary>
     public List<PetActionConfig> PluginActions { get; } = new();
 
-    /// <summary>插件注册的文件拖放动作</summary>
+    /// <summary>插件注册的文件动作（径向菜单）</summary>
     public List<FileActionConfig> FileActions { get; } = new();
 
-    /// <summary>显示气泡文字的 UI 回调（由 ViewModel 设置）</summary>
+    /// <summary>显示气泡文字的 UI 回调</summary>
     public Action<string, string>? OnShowThought { get; set; }
 
-    /// <summary>输入框回调（由 App 设置，返回 null 表示取消）</summary>
+    /// <summary>输入框回调</summary>
     public Func<string, string, string?, Task<string?>>? OnShowInputDialog { get; set; }
 
     /// <summary>日志输出</summary>
@@ -29,45 +29,33 @@ public class PluginHostImpl : IPluginHost
         _config = config;
     }
 
-    public void RegisterReaction(string trigger, string emoji)
+    public void RegisterAction(PluginAction action)
     {
-        // 暂存，供 ViewModel 使用
-    }
-
-    public void RegisterAction(string name, string emoji, string reaction, string description, string group = "")
-    {
-        PluginActions.Add(new PetActionConfig
+        if (action.Target == ActionTarget.ContextMenu)
         {
-            Name = name,
-            Emoji = emoji,
-            Reaction = reaction,
-            Description = description,
-            Group = group,
-        });
-    }
-
-    public void RegisterAction(string name, string emoji, string description, string group, Func<Task> callback)
-    {
-        PluginActions.Add(new PetActionConfig
+            // 右键菜单
+            PluginActions.Add(new PetActionConfig
+            {
+                Name = action.Name,
+                Emoji = action.Emoji,
+                Reaction = action.Emoji,
+                Description = action.Description,
+                Group = action.Group,
+                ActionCallback = action.Callback,
+            });
+        }
+        else
         {
-            Name = name,
-            Emoji = emoji,
-            Reaction = "🔍",
-            Description = description,
-            Group = group,
-            ActionCallback = callback,
-        });
-    }
-
-    public void RegisterFileAction(string name, string emoji, string description, Func<string[], Task> handler)
-    {
-        FileActions.Add(new FileActionConfig
-        {
-            Name = name,
-            Emoji = emoji,
-            Description = description,
-            ActionCallback = handler,
-        });
+            // 径向菜单（文件拖放）
+            FileActions.Add(new FileActionConfig
+            {
+                Name = action.Name,
+                Emoji = action.Emoji,
+                Description = action.Description,
+                FileExtensions = action.FileExtensions,
+                ActionCallback = action.FileCallback,
+            });
+        }
     }
 
     public void ShowThought(string title, string text)
@@ -82,16 +70,8 @@ public class PluginHostImpl : IPluginHost
         return Task.FromResult<string?>(null);
     }
 
-    public string? GetConfig(string key)
-    {
-        // 用统一前缀避免冲突
-        return _config.GetPluginValue(key);
-    }
-
-    public void SetConfig(string key, string value)
-    {
-        _config.SetPluginValue(key, value);
-    }
+    public string? GetConfig(string key) => _config.GetPluginValue(key);
+    public void SetConfig(string key, string value) { _config.SetPluginValue(key, value); }
 
     public void Log(string message)
     {

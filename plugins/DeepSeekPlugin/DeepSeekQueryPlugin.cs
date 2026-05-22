@@ -26,9 +26,15 @@ public class DeepSeekQueryPlugin : PluginBase
         _host = host;
         await base.InitializeAsync(host);
 
-        // 设置 API Key（始终可用）
-        host.RegisterAction("设置 API Key", "🔑", "⚙️", "DeepSeek",
-            async () =>
+        // 设置 API Key
+        host.RegisterAction(new PluginAction
+        {
+            Name = "设置 API Key",
+            Emoji = "🔑",
+            Description = "配置 DeepSeek API Key",
+            Group = "DeepSeek",
+            Target = ActionTarget.ContextMenu,
+            Callback = async () =>
             {
                 var currentKey = host.GetConfig(ConfigKey) ?? "";
                 var key = await host.ShowInputDialog(
@@ -40,15 +46,30 @@ public class DeepSeekQueryPlugin : PluginBase
                 host.SetConfig(ConfigKey, key);
                 host.ShowThought("✅ 配置已保存",
                     "DeepSeek API Key 已保存，现在可以使用查询功能。");
-            });
+            },
+        });
 
         // 查询余额
-        host.RegisterAction("查询余额", "💰", "🔍", "DeepSeek",
-            async () => await QueryBalance());
+        host.RegisterAction(new PluginAction
+        {
+            Name = "查询余额",
+            Emoji = "💰",
+            Description = "查询 DeepSeek API 余额和账户状态",
+            Group = "DeepSeek",
+            Target = ActionTarget.ContextMenu,
+            Callback = async () => await QueryBalance(),
+        });
 
         // 缓存测试
-        host.RegisterAction("缓存命中测试", "⚡", "🔍", "DeepSeek",
-            async () => await TestCache());
+        host.RegisterAction(new PluginAction
+        {
+            Name = "缓存命中测试",
+            Emoji = "⚡",
+            Description = "发送两次请求对比缓存命中率",
+            Group = "DeepSeek",
+            Target = ActionTarget.ContextMenu,
+            Callback = async () => await TestCache(),
+        });
 
         host.Log("DeepSeek 查询插件已加载");
     }

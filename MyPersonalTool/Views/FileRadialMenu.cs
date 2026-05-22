@@ -10,9 +10,6 @@ using MyPersonalTool.Core.Models;
 
 namespace MyPersonalTool.Views;
 
-/// <summary>
-/// 文件拖放径向菜单 —— 拖文件到宠物时即时弹出，可直接拖到选项上释放。
-/// </summary>
 public class FileRadialMenu : Window
 {
     private readonly List<FileActionConfig> _actions;
@@ -26,18 +23,13 @@ public class FileRadialMenu : Window
     private const double Radius = 88;
     private const double ItemSize = 72;
 
-    // ═══ 自定义区域：调整选项排列位置 ═══
-    // 全圆分 10 份，每份 36°；ArcPosition 指定从第几份开始
-    // ArcPosition : 0=正上  1=右上  2=右  3=右下  4=下  5=左下  6=左  7=左上  8,9=其他
     private const int TotalParts = 10;
-    private const int ArcPosition = 0;   // 弧段起点 (0~9)
-    private const int ArcSpan = 3;       // 弧段覆盖的份数（选项越多此值应越大）
-    // ═══════════════════════════════════
+    private const int ArcPosition = 0;
+    private const int ArcSpan = 3;
 
     private static double ArcAngle => ArcSpan * (2 * Math.PI / TotalParts);
     private static double ArcCenterAngle => -Math.PI / 2 + ArcPosition * (2 * Math.PI / TotalParts);
 
-    // 主题色缓存
     private static readonly Lazy<Color> BgOverlay = new(() => GetColor("BgOverlay", 0xCC2C2420));
     private static readonly Lazy<Color> BorderColor = new(() => GetColor("BorderColor", 0xFF5D4F45));
     private static readonly Lazy<Color> TextPrimary = new(() => GetColor("TextPrimary", 0xFFF0E6D3));
@@ -61,7 +53,6 @@ public class FileRadialMenu : Window
         Opacity = 0;
         DragDrop.SetAllowDrop(this, true);
 
-        // Width/Height 是 DIP，Position 是物理像素，需用 scaling 换算
         var scaling = this.RenderScaling;
         Position = new PixelPoint(
             _anchorCenter.X - (int)(MenuSize * scaling / 2),
@@ -74,8 +65,6 @@ public class FileRadialMenu : Window
         var baseBg = new SolidColorBrush(BgOverlay.Value);
         var baseBorder = new SolidColorBrush(BorderColor.Value);
         var textClr = new SolidColorBrush(TextPrimary.Value);
-        var hoverBg = new SolidColorBrush(BgHover.Value);
-        var hoverBorder = new SolidColorBrush(AccentPrimary.Value);
 
         var halfItem = ItemSize / 2;
         var startAngle = ArcCenterAngle - ArcAngle / 2;
@@ -130,7 +119,6 @@ public class FileRadialMenu : Window
         }
         _itemReady = new bool[_items.Count];
 
-        // 窗口自身处理拖放（根据鼠标位置确定 hover 项）
         AddHandler(DragDrop.DragOverEvent, (_, e) =>
         {
             e.DragEffects = DragDropEffects.Copy;
@@ -152,9 +140,12 @@ public class FileRadialMenu : Window
             Close();
         });
 
-        AddHandler(DragDrop.DragLeaveEvent, (_, _) => _ = DelayClose());
-
         Deactivated += (_, _) => Close();
+
+        KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape) Close();
+        };
 
         this.Transitions = new Transitions
         {
@@ -171,24 +162,21 @@ public class FileRadialMenu : Window
 
     private async Task AnimateItemsIn()
     {
-        // 预先启动浮动 timer，每个选项入场后自动加入
         StartFloating();
 
         for (var i = 0; i < _items.Count; i++)
         {
-            await Task.Delay(60);
+            var delay = Math.Max(10, 30 - i * 10);
+            var scaleMs = Math.Max(60, 180 - i * 50);
+            await Task.Delay(delay);
             _items[i].Opacity = 1;
-            // 入场缩放动画（弹性缓出）
-            await AnimateScale(_items[i], 0.6, 1.0, 300, new ElasticEaseOut());
-            // 标记为已入场，浮动 timer 接管
+            await AnimateScale(_items[i], 0.6, 1.0, scaleMs, new CubicEaseOut());
             _itemReady[i] = true;
         }
     }
 
-    /// <summary>逐帧平滑缩放</summary>
-    private static async Task AnimateScale(Border item, double from, double to, int ms, Easing? easing)
+    private static async Task AnimateScale(Border item, double from, double to, int ms, Easing easing)
     {
-        easing ??= new CubicEaseOut();
         var frames = ms / 16;
         for (var f = 0; f <= frames; f++)
         {
@@ -200,7 +188,6 @@ public class FileRadialMenu : Window
         item.RenderTransform = new ScaleTransform(to, to);
     }
 
-    /// <summary>所有已入场选项持续上下浮动（顺时针相位错开）</summary>
     private void StartFloating()
     {
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
@@ -210,7 +197,7 @@ public class FileRadialMenu : Window
             var t = (DateTime.UtcNow - startTime).TotalSeconds;
             for (var i = 0; i < _items.Count; i++)
             {
-                if (!_itemReady[i]) continue; // 尚未入场，跳过
+                if (!_itemReady[i]) continue;
                 var phase = t * 2 * Math.PI / 1.8 + i * Math.PI / 3;
                 var offset = Math.Sin(phase) * 5;
                 _items[i].RenderTransform = new TransformGroup
@@ -281,12 +268,6 @@ public class FileRadialMenu : Window
         }
         catch { }
         Close();
-    }
-
-    private async Task DelayClose()
-    {
-        await Task.Delay(800);
-        if (!_closed) Close();
     }
 
     public static void ShowDuringDrag(Window owner, List<FileActionConfig> actions, PixelPoint anchorCenter)

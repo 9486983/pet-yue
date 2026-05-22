@@ -242,13 +242,42 @@ public partial class PetWindow : Window
 
         if (_vm.FileActions.Count > 0)
         {
-            var bodyBounds = PetBody.Bounds;
-            var bodyCenterInWindow = new Point(
-                bodyBounds.X + bodyBounds.Width / 2,
-                bodyBounds.Y + bodyBounds.Height / 2);
-            var screenPt = this.PointToScreen(bodyCenterInWindow);
-            Views.FileRadialMenu.ShowDuringDrag(this, _vm.FileActions, screenPt);
+            // 尝试提前读取文件扩展名，用于过滤
+            var exts = TryGetExtensions(e);
+
+            // 根据扩展名过滤可用动作
+            var actions = _vm.FileActions
+                .Where(a => a.MatchesExtension(exts))
+                .ToList();
+
+            if (actions.Count > 0)
+            {
+                var bodyBounds = PetBody.Bounds;
+                var bodyCenterInWindow = new Point(
+                    bodyBounds.X + bodyBounds.Width / 2,
+                    bodyBounds.Y + bodyBounds.Height / 2);
+                var screenPt = this.PointToScreen(bodyCenterInWindow);
+                Views.FileRadialMenu.ShowDuringDrag(this, actions, screenPt);
+            }
         }
+    }
+
+    /// <summary>从拖放数据中获取文件扩展名集合</summary>
+    private static HashSet<string> TryGetExtensions(DragEventArgs e)
+    {
+        try
+        {
+            var items = e.DataTransfer?.TryGetFiles();
+            if (items != null)
+            {
+                return items
+                    .Select(i => Path.GetExtension(i.Path.LocalPath)?.ToLowerInvariant())
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .ToHashSet()!;
+            }
+        }
+        catch { }
+        return [];
     }
 
     private void OnDragOver(object? sender, DragEventArgs e)
