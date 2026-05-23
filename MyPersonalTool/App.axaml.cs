@@ -76,6 +76,14 @@ public partial class App : Application
             petVm.CancelTaskCallback = () =>
                 pluginHost.CancelCurrentTask();
 
+            // ── 连接会话事件 ──
+            pluginHost.OnSessionStarted = session =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => petVm.OnSessionStarted(session));
+            pluginHost.OnSessionEnded = () =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => petVm.OnSessionEnded());
+            petVm.EndSessionCallback = () =>
+                pluginHost.CurrentSession?.Cancel();
+
             // ── 连接剪贴板 ──
             petVm.ClipboardSetText = text =>
             {

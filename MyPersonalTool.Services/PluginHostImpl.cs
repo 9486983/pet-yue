@@ -18,6 +18,13 @@ public class PluginHostImpl : IPluginHost
     /// <summary>当前被激活的默认文件操作（激活后拖文件直接执行，不弹菜单）</summary>
     public FileActionConfig? ActivatedAction { get; set; }
 
+    /// <summary>会话生命周期事件</summary>
+    public Action<ISession>? OnSessionStarted { get; set; }
+    public Action? OnSessionEnded { get; set; }
+
+    /// <summary>当前活跃会话（无则为 null）</summary>
+    public ISession? CurrentSession => _currentSession;
+
     /// <summary>显示气泡文字的 UI 回调</summary>
     public Action<string, string>? OnShowThought { get; set; }
 
@@ -32,6 +39,7 @@ public class PluginHostImpl : IPluginHost
     public Action<bool>? OnTaskRunningChanged { get; set; }
 
     private CancellationTokenSource? _currentCts;
+    private SessionImpl? _currentSession;
 
     /// <summary>输入框回调</summary>
     public Func<string, string, string?, Task<string?>>? OnShowInputDialog { get; set; }
@@ -72,6 +80,37 @@ public class PluginHostImpl : IPluginHost
                 ActionCallback = action.FileCallback,
             });
         }
+    }
+
+    // ── 会话管理 ──
+
+    public ISession StartSession(string title)
+    {
+        // 如有现有会话，先结束
+        _currentSession?.Cancel();
+
+        var session = new SessionImpl(title);
+        session.OnEndRequested = OnSessionEnd;
+
+        _currentSession = session;
+
+        // 自动激活同名的文件动作
+        var match = FileActions.FirstOrDefault(a =>
+            a.Name.Equals(title, StringComparison.OrdinalIgnoreCase));
+        if (match != null)
+            ActivatedAction = match;
+
+        OnSessionStarted?.Invoke(session);
+        // 不设置 IsTaskRunning —— 进度环由 RunWithAnimation 控制
+        return session;
+    }
+
+    private void OnSessionEnd()
+    {
+        ActivatedAction = null;
+        _currentSession = null;
+        // 不重置 IsTaskRunning —— 由 RunWithAnimation 的 finally 块负责
+        OnSessionEnded?.Invoke();
     }
 
     public void ShowThought(string title, string text)

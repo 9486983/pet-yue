@@ -127,7 +127,25 @@ public partial class PetWindow : Window
         if (_vm == null) return;
         var menu = new ContextMenu();
 
-        if (_vm.IsActivated)
+        // 会话中 → 显示结束会话（不论是否激活，因为会话可能来自右键菜单动作）
+        if (_vm.IsSessionActive)
+        {
+            var session = _vm.CurrentSession;
+            var title = session?.Title ?? "会话";
+            var status = session?.Status ?? "";
+            var statusSuffix = string.IsNullOrEmpty(status) ? "" : $"（{status}）";
+            var endItem = new MenuItem
+            {
+                Header = $"⏹️ 结束{title}{statusSuffix}",
+                FontSize = 13,
+                Foreground = ThemeBrush("TextPrimary"),
+            };
+            endItem.Click += (_, _) => _vm.EndSessionCallback?.Invoke();
+            menu.Items.Add(endItem);
+            menu.Items.Add(new Separator());
+        }
+        // 普通激活（无会话）→ 显示解锁
+        else if (_vm.IsActivated)
         {
             var n = _vm.ActivatedFileAction?.Name ?? "";
             var unlockItem = new MenuItem

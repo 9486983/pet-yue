@@ -3,6 +3,19 @@ namespace MyPersonalTool.Sdk;
 /// <summary>插件宿主接口 —— 插件通过此接口与主程序交互</summary>
 public interface IPluginHost
 {
+    // ── 会话多步工作流 ──
+
+    /// <summary>当前活跃会话（无则为 null）</summary>
+    ISession? CurrentSession { get; }
+
+    /// <summary>
+    /// 启动一个多步会话，同时自动锁定与此会话同名的动作为默认拖放操作。
+    /// 后续拖入文件将不再弹出径向菜单，直接路由到该动作的回调。
+    /// 插件在回调内通过 <see cref="ISession.Context"/> 在多次调用间共享状态。
+    /// </summary>
+    /// <param name="title">会话标题，需与 <see cref="PluginAction.Name"/> 一致以便自动激活</param>
+    /// <returns>会话实例，线程安全</returns>
+    ISession StartSession(string title);
     /// <summary>注册一个动作（右键菜单 / 径向菜单均可）</summary>
     void RegisterAction(PluginAction action);
 

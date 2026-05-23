@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using MyPersonalTool.Core.Interfaces;
 using MyPersonalTool.Core.Models;
 using MyPersonalTool.Services;
+using MyPersonalTool.Sdk;
 
 namespace MyPersonalTool.ViewModels;
 
@@ -87,8 +88,11 @@ public partial class PetViewModel : ObservableObject
     /// <summary>是否处于激活模式</summary>
     public bool IsActivated => ActivatedFileAction != null;
 
-    /// <summary>显示 💡 指示灯（激活且无任务进行中）</summary>
+    /// <summary>显示 💡 指示灯（激活且无任务进行中；会话中显示 📋）</summary>
     public bool IsIndicatorVisible => IsActivated && !IsTaskRunning;
+
+    /// <summary>指示灯文字：会话中 📋，普通激活 💡</summary>
+    public string IndicatorText => IsSessionActive ? "📋" : "💡";
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsActivated))]
@@ -106,10 +110,48 @@ public partial class PetViewModel : ObservableObject
     /// <summary>取消任务回调（由 App 层设置，调用插件 host.CancelCurrentTask）</summary>
     public Action? CancelTaskCallback { get; set; }
 
+    // ── 会话多步工作流 ──
+
+    /// <summary>当前活跃会话（无则为 null）</summary>
+    public ISession? CurrentSession { get; set; }
+
+    /// <summary>是否有会话进行中</summary>
+    public bool IsSessionActive => CurrentSession?.IsActive == true;
+
+    /// <summary>结束会话回调（由 App 层设置，调用 host.CurrentSession.Cancel）</summary>
+    public Action? EndSessionCallback { get; set; }
+
     [RelayCommand]
     private void CancelRunningTask()
     {
         CancelTaskCallback?.Invoke();
+    }
+
+    // ── 会话事件（由 App 层通过回调调用） ──
+
+    /// <summary>会话启动时调用</summary>
+    public void OnSessionStarted(ISession session)
+    {
+        CurrentSession = session;
+
+        // 同步激活状态到 VM，使拖放路由能识别
+        var match = _fileActions.FirstOrDefault(a =>
+            a.Name.Equals(session.Title, StringComparison.OrdinalIgnoreCase));
+        if (match != null)
+            ActivatedFileAction = match;
+
+        OnPropertyChanged(nameof(IndicatorText));
+        ShowFileDropInfo($"📋 {session.Title}", string.IsNullOrEmpty(session.Status)
+            ? "会话已开始，拖入文件继续处理" : session.Status);
+    }
+
+    /// <summary>会话结束时调用</summary>
+    public void OnSessionEnded()
+    {
+        CurrentSession = null;
+        ActivatedFileAction = null;
+        OnPropertyChanged(nameof(IndicatorText));
+        ShowFileDropInfo("✅ 会话已结束", "多步工作流已完成，恢复常规模式。");
     }
 
     public PetViewModel(IConfigService configService, IDispatcherService dispatcher,
