@@ -23,12 +23,13 @@ public class FileRadialMenu : Window
     private const double Radius = 88;
     private const double ItemSize = 72;
 
-    private const int TotalParts = 10;
-    private const int ArcPosition = 0;
-    private const int ArcSpan = 5;
+    // 全圆分 12 份（以时钟为参考），ArcPosition 指定从第几份开始
+    // 选项依次占据连续的 1 份位置，不跳格
+    private const int TotalParts = 12;
+    private const int ArcPosition = 0;   // 0=12点  1=1点  2=2点  ... 11=11点
 
-    private static double ArcAngle => ArcSpan * (2 * Math.PI / TotalParts);
-    private static double ArcCenterAngle => -Math.PI / 2 + ArcPosition * (2 * Math.PI / TotalParts);
+    private static double ArcStep => 2 * Math.PI / TotalParts;
+    private static double ArcCenterAngle => -Math.PI / 2 + ArcPosition * ArcStep;
 
     private static readonly Lazy<Color> BgOverlay = new(() => GetColor("BgOverlay", 0xCC2C2420));
     private static readonly Lazy<Color> BorderColor = new(() => GetColor("BorderColor", 0xFF5D4F45));
@@ -67,13 +68,12 @@ public class FileRadialMenu : Window
         var textClr = new SolidColorBrush(TextPrimary.Value);
 
         var halfItem = ItemSize / 2;
-        var startAngle = ArcCenterAngle - ArcAngle / 2;
-        var angleStep = count > 1 ? ArcAngle / (count - 1) : 0;
 
+        // 每个选项占据 1 份位置，从 ArcPosition 开始顺时针排列
         for (var i = 0; i < count; i++)
         {
             var action = actions[i];
-            var angle = startAngle + angleStep * i;
+            var angle = ArcCenterAngle + i * ArcStep;
             var cx = MenuSize / 2 + Radius * Math.Cos(angle);
             var cy = MenuSize / 2 + Radius * Math.Sin(angle);
 
