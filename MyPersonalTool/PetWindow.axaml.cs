@@ -200,8 +200,8 @@ public partial class PetWindow : Window
     // ── 文件拖放 ──
     private void OnDragEnter(object? sender, DragEventArgs e)
     {
-        if (_vm == null) return;
         e.DragEffects = DragDropEffects.Copy;
+        if (_vm == null) return;
         if (_vm.IsActivated) return;
         if (_vm.FileActions.Count == 0) return;
 
@@ -242,8 +242,15 @@ public partial class PetWindow : Window
         return [];
     }
 
-    private void OnDragOver(object? sender, DragEventArgs e) => e.DragEffects = DragDropEffects.Copy;
-    private void OnDragLeave(object? sender, DragEventArgs e) => _vm?.ShowReaction("\U0001f44b");
+    private void OnDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = DragDropEffects.Copy;
+    }
+
+    private void OnDragLeave(object? sender, DragEventArgs e)
+    {
+        _vm?.ShowReaction("\U0001f44b");
+    }
 
     private void OnDrop(object? sender, DragEventArgs e)
     {

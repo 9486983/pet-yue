@@ -13,13 +13,13 @@
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         PointerPressed="OnWindowPointerPressed"
-        DragDrop.AllowDrop="True"
+        DragDrop.AllowDrop="True">
+
+  <Grid DragDrop.AllowDrop="True"
         DragDrop.DragEnter="OnDragEnter"
         DragDrop.DragOver="OnDragOver"
         DragDrop.DragLeave="OnDragLeave"
         DragDrop.Drop="OnDrop">
-
-  <Grid>
     <!-- 统一外部气泡（替代内部气泡 + 旧 Popup） -->
     <Popup x:Name="BubblePopup"
            Placement="Top"
