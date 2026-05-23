@@ -15,6 +15,9 @@ public class PluginHostImpl : IPluginHost
     /// <summary>插件注册的文件动作（径向菜单）</summary>
     public List<FileActionConfig> FileActions { get; } = new();
 
+    /// <summary>当前被激活的默认文件操作（激活后拖文件直接执行，不弹菜单）</summary>
+    public FileActionConfig? ActivatedAction { get; set; }
+
     /// <summary>显示气泡文字的 UI 回调</summary>
     public Action<string, string>? OnShowThought { get; set; }
 
@@ -53,6 +56,7 @@ public class PluginHostImpl : IPluginHost
                 Emoji = action.Emoji,
                 Description = action.Description,
                 FileExtensions = action.FileExtensions,
+                AcceptType = action.AcceptType,
                 ActionCallback = action.FileCallback,
             });
         }

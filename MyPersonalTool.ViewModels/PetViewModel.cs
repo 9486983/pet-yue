@@ -84,6 +84,13 @@ public partial class PetViewModel : ObservableObject
     public List<FileActionConfig> FileActions => _fileActions;
     private readonly List<FileActionConfig> _fileActions = [];
 
+    /// <summary>是否处于激活模式（拖文件直接执行默认操作）</summary>
+    public bool IsActivated => ActivatedFileAction != null;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsActivated))]
+    private FileActionConfig? _activatedFileAction;
+
     /// <summary>剪贴板写入回调（由 UI 层设置）</summary>
     public Action<string>? ClipboardSetText { get; set; }
 
@@ -192,6 +199,9 @@ public partial class PetViewModel : ObservableObject
             merged.AddRange(pluginActions);
             Actions = merged;
         }
+
+        // 恢复上次激活的默认操作
+        RestoreActivatedAction();
 
         // 启动 Agent 监测
         if (activityMonitor != null)
@@ -365,6 +375,40 @@ public partial class PetViewModel : ObservableObject
         ShowReaction(action.Reaction);
         AnimCurrentRow = 4; // jumping
         ResetAnimRowAfterDelay();
+    }
+
+    /// <summary>激活一个文件动作为默认拖放操作</summary>
+    public void ActivateAction(FileActionConfig action)
+    {
+        ActivatedFileAction = action;
+        _configService.Config.ActivatedFileActionName = action.Name;
+        _configService.Save();
+        ShowFileDropInfo("📌 已锁定", $"「{action.Emoji} {action.Name}」\n拖文件将直接执行此操作，右键可解锁。");
+    }
+
+    /// <summary>解锁默认拖放操作</summary>
+    public void DeactivateAction()
+    {
+        if (ActivatedFileAction == null) return;
+        var name = ActivatedFileAction.Name;
+        ActivatedFileAction = null;
+        _configService.Config.ActivatedFileActionName = null;
+        _configService.Save();
+        ShowFileDropInfo("🔓 已解锁", $"「{name}」已取消锁定，拖文件将恢复弹出选项菜单。");
+    }
+
+    /// <summary>重启后恢复上次激活的操作</summary>
+    private void RestoreActivatedAction()
+    {
+        var savedName = _configService.Config.ActivatedFileActionName;
+        if (string.IsNullOrEmpty(savedName)) return;
+        var match = _fileActions.FirstOrDefault(a =>
+            a.Name.Equals(savedName, StringComparison.OrdinalIgnoreCase));
+        if (match != null)
+        {
+            ActivatedFileAction = match;
+            // 不弹气泡，安静恢复
+        }
     }
 
     [RelayCommand]

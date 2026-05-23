@@ -17,4 +17,7 @@ public class AppConfig
 
     /// <summary>插件自定义配置存储</summary>
     public Dictionary<string, string> PluginValues { get; set; } = new();
+
+    /// <summary>已激活的默认拖放操作名称（持久化，重启恢复）</summary>
+    public string? ActivatedFileActionName { get; set; }
 }

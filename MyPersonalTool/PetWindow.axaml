@@ -12,12 +12,14 @@
         ShowInTaskbar="False"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
-        PointerPressed="OnWindowPointerPressed">
-
-  <Grid DragDrop.AllowDrop="True"
+        PointerPressed="OnWindowPointerPressed"
+        DragDrop.AllowDrop="True"
         DragDrop.DragEnter="OnDragEnter"
+        DragDrop.DragOver="OnDragOver"
         DragDrop.DragLeave="OnDragLeave"
         DragDrop.Drop="OnDrop">
+
+  <Grid>
     <!-- 统一外部气泡（替代内部气泡 + 旧 Popup） -->
     <Popup x:Name="BubblePopup"
            Placement="Top"
@@ -56,6 +58,15 @@
         </StackPanel>
       </Border>
     </Popup>
+
+    <!-- 激活状态指示灯（右上角） -->
+    <Border Width="20" Height="20"
+            IsVisible="{Binding IsActivated}"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,6,6,0">
+      <TextBlock Text="💡" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Border>
 
     <!-- 宠物主体 -->
     <Border x:Name="PetBody"

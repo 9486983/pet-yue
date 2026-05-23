@@ -16,8 +16,10 @@ public class FileRadialMenu : Window
     private readonly PixelPoint _anchorCenter;
     private readonly List<Border> _items = [];
     private readonly bool[] _itemReady = [];
+    private readonly Action<FileActionConfig>? _onActivate;
     private bool _closed;
     private int _hoveredIndex = -1;
+    private int _activatedIndex = -1; // 防止重复激活
 
     private const double MenuSize = 300;
     private const double Radius = 88;
@@ -37,10 +39,11 @@ public class FileRadialMenu : Window
     private static readonly Lazy<Color> AccentPrimary = new(() => GetColor("AccentPrimary", 0xFF19c8b9));
     private static readonly Lazy<Color> BgHover = new(() => GetColor("BgHover", 0xFF4D3F37));
 
-    private FileRadialMenu(List<FileActionConfig> actions, PixelPoint anchorCenter)
+    private FileRadialMenu(List<FileActionConfig> actions, PixelPoint anchorCenter, Action<FileActionConfig>? onActivate)
     {
         _actions = actions;
         _anchorCenter = anchorCenter;
+        _onActivate = onActivate;
 
         Title = "";
         Width = MenuSize;
@@ -123,7 +126,17 @@ public class FileRadialMenu : Window
         {
             e.DragEffects = DragDropEffects.Copy;
             var pt = e.GetPosition(canvas);
+            var idx = FindNearestIndex(pt);
+
             HighlightNearest(pt);
+
+            // Ctrl + 悬浮 → 激活该选项（仅触发一次）
+            if (idx >= 0 && idx != _activatedIndex && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+            {
+                _activatedIndex = idx;
+                // 激活视觉：金色边框，不覆盖 HighlightNearest 效果
+                if (!_closed) _onActivate?.Invoke(_actions[idx]);
+            }
         });
 
         AddHandler(DragDrop.DropEvent, async (_, e) =>
@@ -270,10 +283,10 @@ public class FileRadialMenu : Window
         Close();
     }
 
-    public static void ShowDuringDrag(Window owner, List<FileActionConfig> actions, PixelPoint anchorCenter)
+    public static void ShowDuringDrag(Window owner, List<FileActionConfig> actions, PixelPoint anchorCenter, Action<FileActionConfig>? onActivate = null)
     {
         if (actions.Count == 0) return;
-        var menu = new FileRadialMenu(actions, anchorCenter);
+        var menu = new FileRadialMenu(actions, anchorCenter, onActivate);
         menu.Open();
     }
 

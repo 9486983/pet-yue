@@ -143,6 +143,20 @@ public partial class PetWindow : Window
 
         var menu = new ContextMenu();
 
+        // 激活/解锁
+        if (_vm.IsActivated)
+        {
+            var unlockItem = new MenuItem
+            {
+                Header = $"🔓 解锁「{_vm.ActivatedFileAction?.Name}」",
+                FontSize = 13,
+                Foreground = ThemeBrush("TextPrimary"),
+            };
+            unlockItem.Click += (_, _) => _vm.DeactivateAction();
+            menu.Items.Add(unlockItem);
+            menu.Items.Add(new Separator());
+        }
+
         // 宠物图鉴
         var dexItem = new MenuItem
         {
@@ -240,14 +254,13 @@ public partial class PetWindow : Window
         if (_vm == null) return;
         e.DragEffects = DragDropEffects.Copy;
 
+        if (_vm.IsActivated) return;
+
         if (_vm.FileActions.Count > 0)
         {
-            // 尝试提前读取文件扩展名，用于过滤
-            var exts = TryGetExtensions(e);
-
-            // 根据扩展名过滤可用动作
+            var (exts, itemType) = TryGetDropInfo(e);
             var actions = _vm.FileActions
-                .Where(a => a.MatchesExtension(exts))
+                .Where(a => a.Matches(exts, itemType))
                 .ToList();
 
             if (actions.Count > 0)
@@ -257,24 +270,42 @@ public partial class PetWindow : Window
                     bodyBounds.X + bodyBounds.Width / 2,
                     bodyBounds.Y + bodyBounds.Height / 2);
                 var screenPt = this.PointToScreen(bodyCenterInWindow);
-                Views.FileRadialMenu.ShowDuringDrag(this, actions, screenPt);
+                Views.FileRadialMenu.ShowDuringDrag(this, actions, screenPt,
+                    (action) => _vm.ActivateAction(action));
             }
         }
     }
 
-    /// <summary>从拖放数据中获取文件扩展名集合</summary>
-    private static HashSet<string> TryGetExtensions(DragEventArgs e)
+    /// <summary>从拖放数据中获取文件扩展名和项目类型</summary>
+    private static (HashSet<string> exts, ItemType type) TryGetDropInfo(DragEventArgs e)
     {
         try
         {
             var items = e.DataTransfer?.TryGetFiles();
-            if (items != null)
+            if (items != null && items.Any())
             {
-                return items
-                    .Select(i => Path.GetExtension(i.Path.LocalPath)?.ToLowerInvariant())
-                    .Where(x => !string.IsNullOrEmpty(x))
-                    .ToHashSet()!;
+                var first = items[0];
+                var isDir = first is Avalonia.Platform.Storage.IStorageFolder;
+                var extList = new List<string?>();
+                foreach (var item in items)
+                {
+                    var ext = Path.GetExtension(item.Path.LocalPath)?.ToLowerInvariant();
+                    if (!string.IsNullOrEmpty(ext)) extList.Add(ext);
+                }
+                return (new HashSet<string>(extList!), isDir ? ItemType.Folder : ItemType.File);
             }
+        }
+        catch { }
+        return ([], ItemType.Both);
+    }
+
+    /// <summary>同步读取拖放文件路径</summary>
+    private static string[] ReadFilesSync(DragEventArgs e)
+    {
+        try
+        {
+            var items = e.DataTransfer?.TryGetFiles();
+            if (items != null) return items.Select(i => i.Path.LocalPath).ToArray();
         }
         catch { }
         return [];
@@ -292,6 +323,20 @@ public partial class PetWindow : Window
 
     private void OnDrop(object? sender, DragEventArgs e)
     {
+        if (_vm == null) return;
+
+        // 激活模式 → 直接执行默认操作
+        if (_vm.IsActivated && _vm.ActivatedFileAction?.ActionCallback != null)
+        {
+            var files = ReadFilesSync(e);
+            if (files.Length > 0)
+            {
+                _vm.ShowReaction("📌");
+                _ = _vm.ActivatedFileAction.ActionCallback(files);
+            }
+            return;
+        }
+
         // 菜单已接管拖放，此处不再处理
     }
 

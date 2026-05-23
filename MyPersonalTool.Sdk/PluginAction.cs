@@ -1,3 +1,5 @@
+using MyPersonalTool.Core.Models;
+
 namespace MyPersonalTool.Sdk;
 
 /// <summary>动作出现的位置</summary>
@@ -33,9 +35,15 @@ public class PluginAction
     /// <example>new[] { ".txt", ".md", ".csv" }</example>
     public string[]? FileExtensions { get; set; }
 
+    /// <summary>接受的项目类型（只有 Target=RadialMenu 时生效）</summary>
+    public ItemType AcceptType { get; set; } = ItemType.Both;
+
     /// <summary>右键菜单点击回调（Target=ContextMenu 时使用）</summary>
     public Func<Task>? Callback { get; set; }
 
     /// <summary>文件拖放回调（Target=RadialMenu 时使用，参数为文件路径数组）</summary>
     public Func<string[], Task>? FileCallback { get; set; }
+
+    /// <summary>是否可被设为默认拖放操作（激活后拖文件直接执行，不弹出菜单）</summary>
+    public bool CanActivate { get; set; }
 }
