@@ -18,81 +18,74 @@ public partial class PetWindow : Window
     public PetWindow()
     {
         InitializeComponent();
-
-        // 定期重设 Topmost，防止被其他窗口覆盖后沉底
-        var topmostTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(3),
-        };
-        topmostTimer.Tick += (_, _) =>
-        {
-            if (IsVisible) Topmost = true;
-        };
-        topmostTimer.Start();
+        var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        t.Tick += (_, _) => { if (IsVisible) Topmost = true; };
+        t.Start();
     }
 
-    /// <summary>确保 ViewModel 就绪后绑定事件</summary>
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
         _vm = DataContext as PetViewModel;
+        if (_vm == null) return;
 
-        if (_vm != null)
+        SyncFrameDuration(_vm.AnimFrameDurationMs);
+        _vm.PropertyChanged += (_, args) =>
         {
-            // 直接同步动画速度（绕过 XAML 绑定，确保生效）
-            SyncFrameDuration(_vm.AnimFrameDurationMs);
-
-            // 监听 AnimFrameDurationMs 变化，直接设置到控件
-            _vm.PropertyChanged += (_, args) =>
+            if (args.PropertyName == nameof(PetViewModel.AnimFrameDurationMs))
+                SyncFrameDuration(_vm.AnimFrameDurationMs);
+            else if (args.PropertyName == nameof(PetViewModel.SpritesheetPath))
+                UpdateBubbleOffset();
+            else if (args.PropertyName == nameof(PetViewModel.IsTaskRunning))
             {
-                if (args.PropertyName == nameof(PetViewModel.AnimFrameDurationMs))
-                    SyncFrameDuration(_vm.AnimFrameDurationMs);
-                else if (args.PropertyName == nameof(PetViewModel.SpritesheetPath))
-                    UpdateBubbleOffset();
-            };
-
-            Dispatcher.UIThread.Post(() => AdjustSize());
-            Dispatcher.UIThread.Post(() => UpdateBubbleOffset(), DispatcherPriority.Loaded);
-        }
+                if (_vm.IsTaskRunning) StartRingAnimation();
+                else StopRingAnimation();
+            }
+        };
+        Dispatcher.UIThread.Post(() => AdjustSize());
+        Dispatcher.UIThread.Post(() => UpdateBubbleOffset(), DispatcherPriority.Loaded);
     }
 
-    private void SyncFrameDuration(double ms)
-    {
-        PetSprite.FrameDurationMs = (int)Math.Round(ms);
-    }
+    private void SyncFrameDuration(double ms) => PetSprite.FrameDurationMs = (int)Math.Round(ms);
+    private void AdjustSize() { Width = 120; Height = 120; }
 
-    private void AdjustSize()
-    {
-        // 根据宠物表情调整窗口大小
-        Width = 120;
-        Height = 120;
-    }
-
-    /// <summary>根据宠物实际可见内容高度调整气泡偏移</summary>
     private void UpdateBubbleOffset()
     {
-        // 等 SpritesheetView 完成帧提取
         Dispatcher.UIThread.Post(() =>
         {
-            var topY = PetSprite.ContentTopY;
-            if (topY < 0)
-            {
-                // 无有效检测 → 恢复默认偏移
-                BubblePopup.VerticalOffset = -8;
-                return;
-            }
-
-            // 精灵显示在 80×80，帧高度经缩放后，算出帧顶部空白占用了多少显示像素
-            var scale = 80.0 / PetSprite.FrameHeight;
-            var extraBlankInDisplay = topY * scale;
-
-            // 把气泡下移「额外空白」的距离，但不超过 PetBody 顶部 (offset ≤ 0)
-            BubblePopup.VerticalOffset = Math.Min(-8 + extraBlankInDisplay, 0);
+            var t = PetSprite.ContentTopY;
+            if (t < 0) { BubblePopup.VerticalOffset = -8; return; }
+            BubblePopup.VerticalOffset = Math.Min(-8 + t * (80.0 / PetSprite.FrameHeight), 0);
         }, DispatcherPriority.Loaded);
     }
 
-    // ── 拖动 ──
+    // ── 进度环动画 ──
+    private DispatcherTimer? _ringTimer;
 
+    private void StartRingAnimation()
+    {
+        StopRingAnimation();
+        _ringTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        double angle = 0;
+        _ringTimer.Tick += (_, _) =>
+        {
+            angle = (angle + 6) % 360;
+            var rad = angle * Math.PI / 180;
+            RingDot.Margin = new Thickness(10 * Math.Sin(rad), -10 * Math.Cos(rad), 0, 0);
+        };
+        _ringTimer.Start();
+    }
+
+    private void StopRingAnimation()
+    {
+        _ringTimer?.Stop();
+        _ringTimer = null;
+    }
+
+    private void OnCancelTaskPointerPressed(object? sender, PointerPressedEventArgs e)
+        => _vm?.CancelRunningTaskCommand.Execute(null);
+
+    // ── 拖动 ──
     private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
@@ -100,131 +93,93 @@ public partial class PetWindow : Window
     }
 
     // ── 单击 / 双击 ──
-
     private void OnPetPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-
         var now = DateTime.Now;
         if ((now - _lastClick).TotalMilliseconds < 350)
         {
-            // 双击 — 打开宠物图鉴
             _lastClick = DateTime.MinValue;
             OpenPetdex();
         }
         else
         {
             _lastClick = now;
-            // 延迟判断是否为单击（等待下一次点击超时）
             Dispatcher.UIThread.Post(async () =>
             {
                 await Task.Delay(400);
                 if ((DateTime.Now - _lastClick).TotalMilliseconds >= 380)
-                {
                     _vm?.SingleClickCommand.Execute(null);
-                }
             });
         }
     }
 
-    // ── 右键菜单（宠物动作） ──
-
-    /// <summary>获取当前主题色（带 fallback）</summary>
-    private static SolidColorBrush ThemeBrush(string resourceKey, uint fallbackHex = 0xFFFFFFFF)
+    // ── 右键菜单 ──
+    private static SolidColorBrush ThemeBrush(string key, uint fallback = 0xFFFFFFFF)
     {
-        if (Application.Current?.TryFindResource(resourceKey, out var value) == true && value is Color c)
+        if (Application.Current?.TryFindResource(key, out var v) == true && v is Color c)
             return new SolidColorBrush(c);
-        return new SolidColorBrush(Color.Parse($"#{fallbackHex:X8}"));
+        return new SolidColorBrush(Color.Parse($"#{fallback:X8}"));
     }
 
     private void OnPetContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (_vm == null) return;
-
         var menu = new ContextMenu();
 
-        // 激活/解锁
         if (_vm.IsActivated)
         {
+            var n = _vm.ActivatedFileAction?.Name ?? "";
             var unlockItem = new MenuItem
             {
-                Header = $"🔓 解锁「{_vm.ActivatedFileAction?.Name}」",
-                FontSize = 13,
-                Foreground = ThemeBrush("TextPrimary"),
+                Header = "\U0001f513 解锁「" + n + "」",
+                FontSize = 13, Foreground = ThemeBrush("TextPrimary"),
             };
             unlockItem.Click += (_, _) => _vm.DeactivateAction();
             menu.Items.Add(unlockItem);
             menu.Items.Add(new Separator());
         }
 
-        // 宠物图鉴
         var dexItem = new MenuItem
         {
-            Header = "📖 宠物图鉴",
-            FontSize = 13,
-            Foreground = ThemeBrush("TextPrimary"),
+            Header = "\U0001f4d6 宠物图鉴",
+            FontSize = 13, Foreground = ThemeBrush("TextPrimary"),
         };
         dexItem.Click += (_, _) => OpenPetdex();
         menu.Items.Add(dexItem);
-
         menu.Items.Add(new Separator());
 
-        // 动作列表（按 Group 分组为二级菜单）
-        var groups = _vm.Actions
-            .GroupBy(a => string.IsNullOrEmpty(a.Group) ? "" : a.Group)
-            .ToList();
-
+        var groups = _vm.Actions.GroupBy(a => string.IsNullOrEmpty(a.Group) ? "" : a.Group).ToList();
         foreach (var group in groups)
         {
             if (string.IsNullOrEmpty(group.Key))
             {
-                // 无分组 → 直接添加到根菜单
-                foreach (var action in group)
-                    menu.Items.Add(BuildMenuItem(action));
+                foreach (var a in group) menu.Items.Add(BuildMenuItem(a));
             }
             else
             {
-                // 有分组 → 创建二级菜单
-                var subMenu = new MenuItem
-                {
-                    Header = group.Key,
-                    FontSize = 13,
-                    Foreground = ThemeBrush("TextPrimary"),
-                };
-                foreach (var action in group)
-                    subMenu.Items.Add(BuildMenuItem(action));
-                menu.Items.Add(subMenu);
+                var sub = new MenuItem { Header = group.Key, FontSize = 13, Foreground = ThemeBrush("TextPrimary") };
+                foreach (var a in group) sub.Items.Add(BuildMenuItem(a));
+                menu.Items.Add(sub);
             }
         }
-
         menu.Items.Add(new Separator());
 
-        // 打开主界面
         var settingsItem = new MenuItem
         {
-            Header = "⚙️ 打开设置",
-            FontSize = 13,
-            Foreground = ThemeBrush("TextPrimary"),
+            Header = "⚙️ 打开设置", FontSize = 13, Foreground = ThemeBrush("TextPrimary"),
         };
         settingsItem.Click += (_, _) =>
         {
-            var settings = App.SettingsWindow;
-            if (settings != null)
-            {
-                settings.Show();
-                settings.WindowState = WindowState.Normal;
-                settings.Activate();
-            }
+            var w = App.SettingsWindow;
+            if (w != null) { w.Show(); w.WindowState = WindowState.Normal; w.Activate(); }
         };
         menu.Items.Add(settingsItem);
-
         menu.Items.Add(new Separator());
 
-        // 关闭宠物（退出应用）
         var closeItem = new MenuItem
         {
-            Header = "✕ 关闭宠物",
-            FontSize = 13,
+            Header = "✕ 关闭宠物", FontSize = 13,
             Foreground = new SolidColorBrush(Color.Parse("#E81123")),
         };
         closeItem.Click += (_, _) => Close();
@@ -234,72 +189,48 @@ public partial class PetWindow : Window
         e.Handled = true;
     }
 
-    // ── 宠物图鉴 ──
-
     private void OpenPetdex()
     {
         if (_vm == null) return;
-
-        var dialog = new PetdexDialog();
-        dialog.LoadPets(_vm);
-        dialog.ShowDialog(this);
+        var d = new PetdexDialog();
+        d.LoadPets(_vm);
+        d.ShowDialog(this);
     }
 
-    // ── 保存位置 ──
-
     // ── 文件拖放 ──
-
     private void OnDragEnter(object? sender, DragEventArgs e)
     {
         if (_vm == null) return;
         e.DragEffects = DragDropEffects.Copy;
-
         if (_vm.IsActivated) return;
+        if (_vm.FileActions.Count == 0) return;
 
-        if (_vm.FileActions.Count > 0)
-        {
-            var (exts, itemType) = TryGetDropInfo(e);
-            var actions = _vm.FileActions
-                .Where(a => a.Matches(exts, itemType))
-                .ToList();
-
-            if (actions.Count > 0)
-            {
-                var bodyBounds = PetBody.Bounds;
-                var bodyCenterInWindow = new Point(
-                    bodyBounds.X + bodyBounds.Width / 2,
-                    bodyBounds.Y + bodyBounds.Height / 2);
-                var screenPt = this.PointToScreen(bodyCenterInWindow);
-                Views.FileRadialMenu.ShowDuringDrag(this, actions, screenPt,
-                    (action) => _vm.ActivateAction(action));
-            }
-        }
+        var (exts, tp) = TryGetDropInfo(e);
+        var actions = _vm.FileActions.Where(a => a.Matches(exts, tp)).ToList();
+        if (actions.Count == 0) return;
+        var b = PetBody.Bounds;
+        var pt = this.PointToScreen(new Point(b.X + b.Width / 2, b.Y + b.Height / 2));
+        Views.FileRadialMenu.ShowDuringDrag(this, actions, pt, act => _vm.ActivateAction(act));
     }
 
-    /// <summary>从拖放数据中获取文件扩展名和项目类型</summary>
-    private static (HashSet<string> exts, ItemType type) TryGetDropInfo(DragEventArgs e)
+    private static (HashSet<string>, ItemType) TryGetDropInfo(DragEventArgs e)
     {
         try
         {
             var items = e.DataTransfer?.TryGetFiles();
-            if (items != null && items.Any())
+            if (items == null || !items.Any()) return ([], ItemType.Both);
+            var isDir = items[0] is IStorageFolder;
+            var exts = new HashSet<string>();
+            foreach (var item in items)
             {
-                var first = items[0];
-                var isDir = first is Avalonia.Platform.Storage.IStorageFolder;
-                var extList = new List<string?>();
-                foreach (var item in items)
-                {
-                    var ext = Path.GetExtension(item.Path.LocalPath)?.ToLowerInvariant();
-                    if (!string.IsNullOrEmpty(ext)) extList.Add(ext);
-                }
-                return (new HashSet<string>(extList!), isDir ? ItemType.Folder : ItemType.File);
+                var ext = Path.GetExtension(item.Path.LocalPath)?.ToLowerInvariant();
+                if (!string.IsNullOrEmpty(ext)) exts.Add(ext);
             }
+            return (exts, isDir ? ItemType.Folder : ItemType.File);
         }
-        catch { }
-        return ([], ItemType.Both);
+        catch { return ([], ItemType.Both); }
     }
 
-    /// <summary>同步读取拖放文件路径</summary>
     private static string[] ReadFilesSync(DragEventArgs e)
     {
         try
@@ -311,59 +242,29 @@ public partial class PetWindow : Window
         return [];
     }
 
-    private void OnDragOver(object? sender, DragEventArgs e)
-    {
-        e.DragEffects = DragDropEffects.Copy;
-    }
-
-    private void OnDragLeave(object? sender, DragEventArgs e)
-    {
-        _vm?.ShowReaction("👋");
-    }
+    private void OnDragOver(object? sender, DragEventArgs e) => e.DragEffects = DragDropEffects.Copy;
+    private void OnDragLeave(object? sender, DragEventArgs e) => _vm?.ShowReaction("\U0001f44b");
 
     private void OnDrop(object? sender, DragEventArgs e)
     {
         if (_vm == null) return;
-
-        // 激活模式 → 直接执行默认操作
-        if (_vm.IsActivated && _vm.ActivatedFileAction?.ActionCallback != null)
-        {
-            var files = ReadFilesSync(e);
-            if (files.Length > 0)
-            {
-                _vm.ShowReaction("📌");
-                _ = _vm.ActivatedFileAction.ActionCallback(files);
-            }
-            return;
-        }
-
-        // 菜单已接管拖放，此处不再处理
+        if (!_vm.IsActivated || _vm.ActivatedFileAction?.ActionCallback == null) return;
+        var files = ReadFilesSync(e);
+        if (files.Length == 0) return;
+        _vm.ShowReaction("\U0001f4cc");
+        _ = _vm.ActivatedFileAction.ActionCallback(files);
     }
 
-    /// <summary>格式化文件大小</summary>
-    private static string FormatSize(long bytes)
-    {
-        return bytes switch
-        {
-            < 1024 => $"{bytes} B",
-            < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-            < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
-            _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
-        };
-    }
-
-    /// <summary>构建右键菜单项</summary>
-    private MenuItem BuildMenuItem(PetActionConfig action)
+    private MenuItem BuildMenuItem(PetActionConfig a)
     {
         var item = new MenuItem
         {
-            Header = $"{action.Emoji} {action.Name}",
-            FontSize = 13,
-            Foreground = ThemeBrush("TextPrimary"),
+            Header = $"{a.Emoji} {a.Name}",
+            FontSize = 13, Foreground = ThemeBrush("TextPrimary"),
         };
-        ToolTip.SetTip(item, action.Description);
-        var captured = action;
-        item.Click += (_, _) => _vm?.PerformActionCommand.Execute(captured);
+        ToolTip.SetTip(item, a.Description);
+        var cap = a;
+        item.Click += (_, _) => _vm?.PerformActionCommand.Execute(cap);
         return item;
     }
 

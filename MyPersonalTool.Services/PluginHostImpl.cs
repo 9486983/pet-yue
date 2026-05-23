@@ -21,6 +21,18 @@ public class PluginHostImpl : IPluginHost
     /// <summary>显示气泡文字的 UI 回调</summary>
     public Action<string, string>? OnShowThought { get; set; }
 
+    /// <summary>显示反应 emoji 的回调</summary>
+    public Action<string>? OnShowReaction { get; set; }
+
+    /// <summary>动画控制回调</summary>
+    public Action<PetAnimation>? OnStartAnimation { get; set; }
+    public Action? OnStopAnimation { get; set; }
+
+    /// <summary>任务状态回调</summary>
+    public Action<bool>? OnTaskRunningChanged { get; set; }
+
+    private CancellationTokenSource? _currentCts;
+
     /// <summary>输入框回调</summary>
     public Func<string, string, string?, Task<string?>>? OnShowInputDialog { get; set; }
 
@@ -65,6 +77,65 @@ public class PluginHostImpl : IPluginHost
     public void ShowThought(string title, string text)
     {
         OnShowThought?.Invoke(title, text);
+    }
+
+    public void ShowReaction(string emoji, PetAnimation animation = PetAnimation.Jump)
+    {
+        OnStartAnimation?.Invoke(animation);
+        OnShowReaction?.Invoke(emoji);
+    }
+
+    public void StartAnimation(PetAnimation animation)
+    {
+        OnStartAnimation?.Invoke(animation);
+    }
+
+    public void StopAnimation()
+    {
+        OnStopAnimation?.Invoke();
+    }
+
+    public async Task RunWithAnimation(PetAnimation animation, Func<CancellationToken, Task> action)
+    {
+        await RunWithAnimation(new[] { animation }, action);
+    }
+
+    public async Task RunWithAnimation(IEnumerable<PetAnimation> animations, Func<CancellationToken, Task> action)
+    {
+        var animList = animations.ToList();
+        if (animList.Count == 0) return;
+
+        _currentCts = new CancellationTokenSource();
+        var token = _currentCts.Token;
+        OnTaskRunningChanged?.Invoke(true);
+
+        // 动画轮换循环
+        _ = Task.Run(async () =>
+        {
+            var idx = 0;
+            while (!token.IsCancellationRequested)
+            {
+                OnStartAnimation?.Invoke(animList[idx % animList.Count]);
+                idx++;
+                try { await Task.Delay(2000, token); }
+                catch (TaskCanceledException) { break; }
+            }
+        }, token);
+
+        try { await action(token); }
+        finally
+        {
+            _currentCts?.Cancel();
+            _currentCts?.Dispose();
+            _currentCts = null;
+            OnStopAnimation?.Invoke();
+            OnTaskRunningChanged?.Invoke(false);
+        }
+    }
+
+    public void CancelCurrentTask()
+    {
+        _currentCts?.Cancel();
     }
 
     public Task<string?> ShowInputDialog(string title, string placeholder, string? initialValue = null)

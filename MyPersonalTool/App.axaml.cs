@@ -65,6 +65,16 @@ public partial class App : Application
             // ── 连接插件气泡回调 ──
             pluginHost.OnShowThought = (title, text) =>
                 petVm.ShowFileDropInfo(title, text);
+            pluginHost.OnShowReaction = emoji =>
+                petVm.ShowReaction(emoji);
+            pluginHost.OnStartAnimation = anim =>
+                petVm.AnimCurrentRow = (int)anim;
+            pluginHost.OnStopAnimation = () =>
+                petVm.AnimCurrentRow = 0;
+            pluginHost.OnTaskRunningChanged = running =>
+                petVm.IsTaskRunning = running;
+            petVm.CancelTaskCallback = () =>
+                pluginHost.CancelCurrentTask();
 
             // ── 连接剪贴板 ──
             petVm.ClipboardSetText = text =>

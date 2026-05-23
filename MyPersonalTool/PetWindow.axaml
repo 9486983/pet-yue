@@ -59,14 +59,36 @@
       </Border>
     </Popup>
 
-    <!-- 激活状态指示灯（右上角） -->
+    <!-- 右上角状态区：💡 或 进度环 -->
+    <!-- 💡：已激活且无任务进行中 -->
     <Border Width="20" Height="20"
-            IsVisible="{Binding IsActivated}"
-            HorizontalAlignment="Right"
-            VerticalAlignment="Top"
-            Margin="0,6,6,0">
+            IsVisible="{Binding IsIndicatorVisible}"
+            HorizontalAlignment="Right" VerticalAlignment="Top"
+            Margin="0,16,16,0">
       <TextBlock Text="💡" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
     </Border>
+
+    <!-- 进度环：有任务执行中，点击取消 -->
+    <Grid x:Name="RingGrid"
+          Width="28" Height="28"
+          IsVisible="{Binding IsTaskRunning}"
+          HorizontalAlignment="Right" VerticalAlignment="Top"
+          Margin="0,13,13,0"
+          Cursor="Hand"
+          ToolTip.Tip="点击取消任务"
+          Background="Transparent"
+          PointerPressed="OnCancelTaskPointerPressed">
+      <!-- 轨道背景圆圈（不拦截点击） -->
+      <Ellipse Stroke="#3319c8b9" StrokeThickness="1"
+               Width="20" Height="20"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               IsHitTestVisible="False" />
+      <!-- 旋转圆点（不拦截点击） -->
+      <Ellipse x:Name="RingDot" Fill="#FF19c8b9"
+               Width="4" Height="4"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               IsHitTestVisible="False" />
+    </Grid>
 
     <!-- 宠物主体 -->
     <Border x:Name="PetBody"

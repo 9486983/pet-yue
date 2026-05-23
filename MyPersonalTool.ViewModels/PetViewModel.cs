@@ -84,86 +84,33 @@ public partial class PetViewModel : ObservableObject
     public List<FileActionConfig> FileActions => _fileActions;
     private readonly List<FileActionConfig> _fileActions = [];
 
-    /// <summary>是否处于激活模式（拖文件直接执行默认操作）</summary>
+    /// <summary>是否处于激活模式</summary>
     public bool IsActivated => ActivatedFileAction != null;
+
+    /// <summary>显示 💡 指示灯（激活且无任务进行中）</summary>
+    public bool IsIndicatorVisible => IsActivated && !IsTaskRunning;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsActivated))]
+    [NotifyPropertyChangedFor(nameof(IsIndicatorVisible))]
     private FileActionConfig? _activatedFileAction;
 
     /// <summary>剪贴板写入回调（由 UI 层设置）</summary>
     public Action<string>? ClipboardSetText { get; set; }
 
-    private void LoadBuiltinFileActions()
-    {
-        _fileActions.Add(new FileActionConfig
-        {
-            Name = "查看信息",
-            Emoji = "📄",
-            Description = "查看文件名称、大小、修改时间",
-            ActionCallback = async (files) =>
-            {
-                var sb = new System.Text.StringBuilder();
-                foreach (var f in files.Take(5))
-                {
-                    try
-                    {
-                        var fi = new FileInfo(f);
-                        var size = FormatFileSize(fi.Length);
-                        var time = fi.LastWriteTime.ToString("yyyy-MM-dd HH:mm");
-                        sb.AppendLine($"📄 {fi.Name}");
-                        sb.AppendLine($"  大小 {size} · {time}");
-                    }
-                    catch { }
-                }
-                if (files.Length > 5)
-                    sb.AppendLine($"  …以及 {files.Length - 5} 个文件");
-                if (sb.Length > 0)
-                    ShowFileDropInfo("📁 文件信息", sb.ToString().TrimEnd());
-                ShowReaction("📂");
-            },
-        });
-        _fileActions.Add(new FileActionConfig
-        {
-            Name = "打开位置",
-            Emoji = "📂",
-            Description = "在资源管理器中打开文件所在文件夹",
-            ActionCallback = async (files) =>
-            {
-                if (files.Length > 0)
-                {
-                    var dir = Path.GetDirectoryName(files[0]);
-                    if (!string.IsNullOrEmpty(dir))
-                    {
-                        System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{files[0]}\"");
-                        ShowReaction("📂");
-                    }
-                }
-            },
-        });
-        _fileActions.Add(new FileActionConfig
-        {
-            Name = "复制路径",
-            Emoji = "📋",
-            Description = "复制文件完整路径到剪贴板",
-            ActionCallback = async (files) =>
-            {
-                if (files.Length > 0)
-                {
-                    ClipboardSetText?.Invoke(files[0]);
-                    ShowReaction("📋");
-                }
-            },
-        });
-    }
+    /// <summary>是否有任务正在执行（控制进度环显隐，隐藏 💡）</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsIndicatorVisible))]
+    private bool _isTaskRunning;
 
-    private static string FormatFileSize(long bytes) => bytes switch
+    /// <summary>取消任务回调（由 App 层设置，调用插件 host.CancelCurrentTask）</summary>
+    public Action? CancelTaskCallback { get; set; }
+
+    [RelayCommand]
+    private void CancelRunningTask()
     {
-        < 1024 => $"{bytes} B",
-        < 1024 * 1024 => $"{bytes / 1024.0:F1} KB",
-        < 1024 * 1024 * 1024 => $"{bytes / (1024.0 * 1024):F1} MB",
-        _ => $"{bytes / (1024.0 * 1024 * 1024):F1} GB",
-    };
+        CancelTaskCallback?.Invoke();
+    }
 
     public PetViewModel(IConfigService configService, IDispatcherService dispatcher,
         IPetdexService petdexService, IActivityMonitor? activityMonitor = null,
@@ -177,8 +124,7 @@ public partial class PetViewModel : ObservableObject
         _activityMonitor = activityMonitor;
         _healthService = healthService;
 
-        // 加载内置文件拖放动作
-        LoadBuiltinFileActions();
+        // 加载插件注册的文件动作
         if (fileActions != null && fileActions.Count > 0)
             _fileActions.AddRange(fileActions);
 
@@ -254,14 +200,15 @@ public partial class PetViewModel : ObservableObject
             {
                 try
                 {
-                    await Task.Delay(3000, ct);
+                    await Task.Delay(2500, ct);
 
-                    // 随机切换动作（~10% 概率，自动适配当前宠物的行数）
-                    if (_random.Next(10) == 0 && AnimRows > 1)
+                    // 待机动作切换（~40% 概率，让宠物更生动）
+                    if (_random.Next(10) < 4 && AnimRows > 1)
                     {
-                        var row = _random.Next(1, AnimRows); // 跳过 idle(0)
+                        var row = _random.Next(1, AnimRows);
                         _dispatcher.Post(() => AnimCurrentRow = row);
-                        await Task.Delay(2000, ct);
+                        var hold = _random.Next(800, 2500);
+                        await Task.Delay(hold, ct);
                         _dispatcher.Post(() =>
                         {
                             if (AnimCurrentRow == row)
@@ -362,10 +309,9 @@ public partial class PetViewModel : ObservableObject
     {
         if (action == null) return;
 
-        // 如果有异步回调，执行它（插件 API 查询等）
         if (action.ActionCallback != null)
         {
-            AnimCurrentRow = 4; // jumping
+            AnimCurrentRow = 1; // thinking
             try { await action.ActionCallback(); }
             catch (Exception ex) { ShowFileDropInfo("⚠️ 插件错误", ex.Message); }
             ResetAnimRowAfterDelay();
@@ -373,7 +319,6 @@ public partial class PetViewModel : ObservableObject
         }
 
         ShowReaction(action.Reaction);
-        AnimCurrentRow = 4; // jumping
         ResetAnimRowAfterDelay();
     }
 
