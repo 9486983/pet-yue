@@ -135,6 +135,10 @@ public partial class App : Application
             pluginHost.OnShowInputDialog = async (title, placeholder, initial) =>
                 await Views.InputDialog.ShowAsync(petWindow, title, placeholder, initial);
 
+            // ── 连接插件确认框回调 ──
+            pluginHost.OnShowConfirmDialog = async (title, text) =>
+                await Views.ConfirmDialog.ShowAsync(petWindow, title, text);
+
             desktop.MainWindow = petWindow;
         }
 
