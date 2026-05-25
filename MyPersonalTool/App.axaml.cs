@@ -37,7 +37,6 @@ public partial class App : Application
             services.AddSingleton<IConfigService, ConfigService>();
             services.AddSingleton<IDispatcherService, AvaloniaDispatcherService>();
             services.AddSingleton<IPetdexService, PetdexService>();
-            services.AddSingleton<IActivityMonitor, ActivityMonitor>();
             services.AddSingleton<HealthReminderService>();
             services.AddSingleton<PluginHostImpl>();
             services.AddSingleton<PluginLoader>();
@@ -51,7 +50,6 @@ public partial class App : Application
             var configService = _serviceProvider.GetRequiredService<IConfigService>();
             var dispatcher = _serviceProvider.GetRequiredService<IDispatcherService>();
             var petdexService = _serviceProvider.GetRequiredService<IPetdexService>();
-            var activityMonitor = _serviceProvider.GetRequiredService<IActivityMonitor>();
             var healthService = _serviceProvider.GetRequiredService<HealthReminderService>();
             var pluginHost = _serviceProvider.GetRequiredService<PluginHostImpl>();
             var pluginLoader = _serviceProvider.GetRequiredService<PluginLoader>();
@@ -75,7 +73,7 @@ public partial class App : Application
 
             // ── 宠物窗口 ──
             var petVm = new PetViewModel(configService, dispatcher, petdexService,
-                activityMonitor, healthService, pluginHost.PluginActions,
+                healthService, pluginHost.PluginActions,
                 pluginHost.FileActions);
             PetViewModel = petVm;
             var petWindow = new PetWindow

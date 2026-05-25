@@ -12,11 +12,9 @@ public partial class PetViewModel : ObservableObject
     private readonly IConfigService _configService;
     private readonly IPetdexService _petdexService;
     private readonly IDispatcherService _dispatcher;
-    private readonly IActivityMonitor? _activityMonitor;
     private readonly HealthReminderService? _healthService;
     private readonly Random _random = new();
     private CancellationTokenSource? _pageCts;
-    private CancellationTokenSource? _activityCts;
 
     // ── 精灵图属性 ──
 
@@ -156,7 +154,7 @@ public partial class PetViewModel : ObservableObject
     }
 
     public PetViewModel(IConfigService configService, IDispatcherService dispatcher,
-        IPetdexService petdexService, IActivityMonitor? activityMonitor = null,
+        IPetdexService petdexService,
         HealthReminderService? healthService = null,
         List<PetActionConfig>? pluginActions = null,
         List<FileActionConfig>? fileActions = null)
@@ -164,7 +162,6 @@ public partial class PetViewModel : ObservableObject
         _configService = configService;
         _dispatcher = dispatcher;
         _petdexService = petdexService;
-        _activityMonitor = activityMonitor;
         _healthService = healthService;
 
         // 加载插件注册的文件动作
@@ -191,10 +188,6 @@ public partial class PetViewModel : ObservableObject
 
         // 恢复上次激活的默认操作
         RestoreActivatedAction();
-
-        // 启动 Agent 监测
-        if (activityMonitor != null)
-            StartActivityMonitoring();
 
         // 启动健康提醒
         if (healthService != null)
@@ -227,62 +220,6 @@ public partial class PetViewModel : ObservableObject
     private void OnConfigSaved()
     {
         AnimFrameDurationMs = _configService.Config.AnimFrameDurationMs;
-    }
-
-    /// <summary>启动 Agent 事件后台轮询</summary>
-    private void StartActivityMonitoring()
-    {
-        _activityCts = new CancellationTokenSource();
-        var ct = _activityCts.Token;
-
-        Task.Run(async () =>
-        {
-            _activityMonitor!.Start();
-
-            while (!ct.IsCancellationRequested)
-            {
-                try
-                {
-                    await Task.Delay(2500, ct);
-
-                    // 待机动作切换（~40% 概率，让宠物更生动）
-                    if (_random.Next(10) < 4 && AnimRows > 1)
-                    {
-                        var row = _random.Next(1, AnimRows);
-                        _dispatcher.Post(() => AnimCurrentRow = row);
-                        var hold = _random.Next(800, 2500);
-                        await Task.Delay(hold, ct);
-                        _dispatcher.Post(() =>
-                        {
-                            if (AnimCurrentRow == row)
-                                AnimCurrentRow = 0;
-                        });
-                    }
-
-                    // 读取新事件 → 显示气泡
-                    var events = _activityMonitor.GetNewEvents();
-                    foreach (var ev in events)
-                    {
-                        if (ev.Type == "response" && !string.IsNullOrEmpty(ev.Content))
-                        {
-                            var preview = ev.Content.Length > 120
-                                ? ev.Content[..120] + "…"
-                                : ev.Content;
-                            _dispatcher.Post(() =>
-                            {
-                                ThoughtText = preview;
-                                ThoughtAssistant = ev.Assistant;
-                                IsShowingThought = true;
-                            });
-                            await Task.Delay(6000, ct);
-                            _dispatcher.Post(() => IsShowingThought = false);
-                        }
-                    }
-                }
-                catch (TaskCanceledException) { break; }
-                catch { }
-            }
-        }, ct);
     }
 
     /// <summary>重新扫描 ~/.codex/pets/ + ~/.petdex/pets/</summary>
@@ -494,8 +431,5 @@ public partial class PetViewModel : ObservableObject
             _healthService.ReminderTriggered -= OnHealthReminder;
             _healthService.Stop();
         }
-        _activityCts?.Cancel();
-        _activityCts?.Dispose();
-        (_activityMonitor as IDisposable)?.Dispose();
     }
 }
