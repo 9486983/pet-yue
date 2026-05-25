@@ -34,5 +34,6 @@ appsettings.Development.json
 ## Claude
 .claude/
 
-## Plugins
-plugins/*.dll
+## Plugin build output (DLLs copied to app output)
+MyPersonalTool/bin/Debug/**/plugins/*.dll
+MyPersonalTool/bin/Release/**/plugins/*.dll

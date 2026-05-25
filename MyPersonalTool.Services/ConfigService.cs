@@ -78,4 +78,16 @@ public class ConfigService : IConfigService
         Config.PluginValues[key] = value;
         Save();
     }
+
+    public void SetPluginValuesBatch(IEnumerable<KeyValuePair<string, string?>> values)
+    {
+        foreach (var (key, value) in values)
+        {
+            if (value != null)
+                Config.PluginValues[key] = value;
+            else
+                Config.PluginValues.Remove(key);
+        }
+        Save();
+    }
 }

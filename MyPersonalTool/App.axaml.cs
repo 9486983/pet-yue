@@ -4,6 +4,8 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Microsoft.Extensions.DependencyInjection;
+using MyPersonalTool.Core.Interfaces;
 using MyPersonalTool.Services;
 using MyPersonalTool.ViewModels;
 
@@ -13,6 +15,8 @@ public partial class App : Application
 {
     public static Window? SettingsWindow { get; private set; }
     public static PetViewModel? PetViewModel { get; private set; }
+
+    private ServiceProvider? _serviceProvider;
 
     private static readonly Uri DarkThemeUri = new("avares://MyPersonalTool/Styles/Themes/Dark.axaml");
     private static readonly Uri LightThemeUri = new("avares://MyPersonalTool/Styles/Themes/Light.axaml");
@@ -26,11 +30,31 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var configService = new ConfigService();
-            var dispatcher = new AvaloniaDispatcherService();
-            var petdexService = new PetdexService();
-            var activityMonitor = new ActivityMonitor();
-            var healthService = new HealthReminderService(configService, dispatcher);
+            // ── 构建 DI 容器 ──
+            var services = new ServiceCollection();
+
+            // 基础设施（Singleton）
+            services.AddSingleton<IConfigService, ConfigService>();
+            services.AddSingleton<IDispatcherService, AvaloniaDispatcherService>();
+            services.AddSingleton<IPetdexService, PetdexService>();
+            services.AddSingleton<IActivityMonitor, ActivityMonitor>();
+            services.AddSingleton<HealthReminderService>();
+            services.AddSingleton<PluginHostImpl>();
+            services.AddSingleton<PluginLoader>();
+
+            // ViewModels（Singleton）
+            services.AddSingleton<MainViewModel>();
+
+            _serviceProvider = services.BuildServiceProvider();
+
+            // ── 从容器解析服务 ──
+            var configService = _serviceProvider.GetRequiredService<IConfigService>();
+            var dispatcher = _serviceProvider.GetRequiredService<IDispatcherService>();
+            var petdexService = _serviceProvider.GetRequiredService<IPetdexService>();
+            var activityMonitor = _serviceProvider.GetRequiredService<IActivityMonitor>();
+            var healthService = _serviceProvider.GetRequiredService<HealthReminderService>();
+            var pluginHost = _serviceProvider.GetRequiredService<PluginHostImpl>();
+            var pluginLoader = _serviceProvider.GetRequiredService<PluginLoader>();
             var config = configService.Config;
 
             // ── 加载主题资源 ──
@@ -40,18 +64,16 @@ public partial class App : Application
             Core.Models.PetEvents.ThemeChanged += isDark =>
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => LoadThemeResources(isDark));
 
-            // ── 加载插件 ──
-            var pluginHost = new PluginHostImpl(configService);
-            var pluginLoader = new PluginLoader();
+            // ── 加载并初始化插件 ──
             pluginLoader.LoadFromDirectory(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "plugins"));
             _ = pluginLoader.InitializeAllAsync(pluginHost);
 
-            // ── 主设置窗口 ──
-            var mainVm = new MainViewModel(configService, dispatcher, pluginLoader);
+            // ── 主设置窗口（MainViewModel 由 DI 构建，自动注入 PluginLoader） ──
+            var mainVm = _serviceProvider.GetRequiredService<MainViewModel>();
             var mainWindow = new MainWindow { DataContext = mainVm };
             SettingsWindow = mainWindow;
 
-            // ── 宠物窗作为主窗口 ──
+            // ── 宠物窗口 ──
             var petVm = new PetViewModel(configService, dispatcher, petdexService,
                 activityMonitor, healthService, pluginHost.PluginActions,
                 pluginHost.FileActions);
@@ -83,6 +105,14 @@ public partial class App : Application
                 Avalonia.Threading.Dispatcher.UIThread.Post(() => petVm.OnSessionEnded());
             petVm.EndSessionCallback = () =>
                 pluginHost.CurrentSession?.Cancel();
+
+            // ── 连接插件配置弹窗 ──
+            pluginHost.OnShowPluginConfig = async section =>
+            {
+                await Views.PluginConfigDialog.ShowAsync(petWindow, section,
+                    key => configService.GetPluginValue(key),
+                    values => pluginHost.SavePluginConfig(values));
+            };
 
             // ── 连接剪贴板 ──
             petVm.ClipboardSetText = text =>
@@ -116,10 +146,8 @@ public partial class App : Application
     {
         RequestedThemeVariant = isDark ? ThemeVariant.Dark : ThemeVariant.Light;
 
-        // 移除旧主题资源
         Resources.MergedDictionaries.Clear();
 
-        // 加载新主题颜色资源
         var uri = isDark ? DarkThemeUri : LightThemeUri;
         Resources.MergedDictionaries.Add(
             (ResourceDictionary)AvaloniaXamlLoader.Load(uri));

@@ -16,6 +16,17 @@ public interface IPluginHost
     /// <param name="title">会话标题，需与 <see cref="PluginAction.Name"/> 一致以便自动激活</param>
     /// <returns>会话实例，线程安全</returns>
     ISession StartSession(string title);
+
+    // ── 插件配置定义 ──
+
+    /// <summary>注册插件配置定义（初始化时调用）</summary>
+    void RegisterConfig(PluginConfigSection config, string? pluginName = null);
+
+    /// <summary>打开插件配置弹窗（由插件在右键菜单回调中调用）</summary>
+    void ShowConfigDialog(string sectionTitle);
+
+    /// <summary>当用户修改并保存插件配置后触发，参数为变更的配置键名</summary>
+    event EventHandler<string>? ConfigValueChanged;
     /// <summary>注册一个动作（右键菜单 / 径向菜单均可）</summary>
     void RegisterAction(PluginAction action);
 

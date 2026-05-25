@@ -25,6 +25,15 @@ public class PluginHostImpl : IPluginHost
     /// <summary>当前活跃会话（无则为 null）</summary>
     public ISession? CurrentSession => _currentSession;
 
+    /// <summary>插件注册的配置定义</summary>
+    public List<PluginConfigSection> PluginConfigs { get; } = new();
+
+    /// <summary>配置变更事件</summary>
+    public event EventHandler<string>? ConfigValueChanged;
+
+    /// <summary>打开插件配置弹窗的回调（由 UI 层设置）</summary>
+    public Func<PluginConfigSection, Task>? OnShowPluginConfig { get; set; }
+
     /// <summary>显示气泡文字的 UI 回调</summary>
     public Action<string, string>? OnShowThought { get; set; }
 
@@ -111,6 +120,33 @@ public class PluginHostImpl : IPluginHost
         _currentSession = null;
         // 不重置 IsTaskRunning —— 由 RunWithAnimation 的 finally 块负责
         OnSessionEnded?.Invoke();
+    }
+
+    // ── 插件配置 ──
+
+    void IPluginHost.RegisterConfig(PluginConfigSection config, string? pluginName)
+    {
+        // 替换同名的已有配置（插件热加载场景）
+        PluginConfigs.RemoveAll(c => c.Title == config.Title);
+        PluginConfigs.Add(config);
+    }
+
+    void IPluginHost.ShowConfigDialog(string sectionTitle)
+    {
+        var section = PluginConfigs.FirstOrDefault(s => s.Title == sectionTitle);
+        if (section != null && OnShowPluginConfig != null)
+            _ = OnShowPluginConfig(section);
+    }
+
+    /// <summary>
+    /// 批量保存插件配置值并通知插件。
+    /// 由 PluginConfigDialog 保存后调用。
+    /// </summary>
+    public void SavePluginConfig(Dictionary<string, string?> values)
+    {
+        _config.SetPluginValuesBatch(values);
+        foreach (var key in values.Keys)
+            ConfigValueChanged?.Invoke(this, key);
     }
 
     public void ShowThought(string title, string text)

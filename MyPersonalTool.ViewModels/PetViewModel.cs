@@ -15,6 +15,7 @@ public partial class PetViewModel : ObservableObject
     private readonly IActivityMonitor? _activityMonitor;
     private readonly HealthReminderService? _healthService;
     private readonly Random _random = new();
+    private CancellationTokenSource? _pageCts;
     private CancellationTokenSource? _activityCts;
 
     // ── 精灵图属性 ──
@@ -423,21 +424,70 @@ public partial class PetViewModel : ObservableObject
             _dispatcher.Post(() => IsReacting = false));
     }
 
-    /// <summary>在对话气泡中显示文件拖放信息</summary>
+    /// <summary>在对话气泡中显示信息，多行内容自动分页轮播（每批最多 3 行，2 秒切换）</summary>
     public void ShowFileDropInfo(string title, string info)
     {
+        // 取消之前的轮播
+        _pageCts?.Cancel();
+
         _dispatcher.Post(() =>
         {
             ThoughtAssistant = title;
-            ThoughtText = info;
             IsShowingThought = true;
         });
-        Task.Delay(8000).ContinueWith(_ =>
-            _dispatcher.Post(() => IsShowingThought = false));
+
+        var lines = info.Split('\n', StringSplitOptions.None);
+        const int linesPerPage = 5;
+
+        if (lines.Length <= linesPerPage)
+        {
+            // 短文本：一次性显示
+            _dispatcher.Post(() => ThoughtText = info);
+            Task.Delay(8000).ContinueWith(_ =>
+                _dispatcher.Post(() => IsShowingThought = false));
+            return;
+        }
+
+        // 长文本：分页轮播
+        var pages = new List<string>();
+        for (var i = 0; i < lines.Length; i += linesPerPage)
+        {
+            var page = string.Join("\n", lines.Skip(i).Take(linesPerPage));
+            pages.Add(page);
+        }
+
+        _pageCts = new CancellationTokenSource();
+        var ct = _pageCts.Token;
+        var pageIndex = 0;
+
+        // 显示第一页
+        _dispatcher.Post(() => ThoughtText = pages[0]);
+
+        // 启动轮播：每页 2.5 秒，结束后再展示 2 秒最后一页
+        Task.Run(async () =>
+        {
+            for (var i = 1; i < pages.Count; i++)
+            {
+                try { await Task.Delay(2500, ct); }
+                catch (TaskCanceledException) { return; }
+
+                if (ct.IsCancellationRequested) return;
+                var idx = i;
+                _dispatcher.Post(() => ThoughtText = pages[idx]);
+            }
+
+            // 全部播完后等待 2 秒再隐藏
+            try { await Task.Delay(3000, ct); }
+            catch (TaskCanceledException) { return; }
+
+            _dispatcher.Post(() => IsShowingThought = false);
+        }, ct);
     }
 
     public void Cleanup()
     {
+        _pageCts?.Cancel();
+        _pageCts?.Dispose();
         PetEvents.ConfigSaved -= OnConfigSaved;
         if (_healthService != null)
         {

@@ -52,7 +52,7 @@
               </Grid>
               <TextBlock Grid.Row="1" Text="{Binding ThoughtText}"
                          FontSize="11" Foreground="{DynamicResource TextPrimary}"
-                         TextWrapping="Wrap" MaxHeight="60" Margin="0,4,0,0" />
+                         TextWrapping="Wrap" MaxHeight="160" Margin="0,4,0,0" />
             </Grid>
           </Grid>
         </StackPanel>

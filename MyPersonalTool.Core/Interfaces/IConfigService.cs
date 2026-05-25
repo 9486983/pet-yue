@@ -13,4 +13,7 @@ public interface IConfigService
 
     /// <summary>插件写入配置值</summary>
     void SetPluginValue(string key, string value);
+
+    /// <summary>批量设置插件配置值（只保存一次）</summary>
+    void SetPluginValuesBatch(IEnumerable<KeyValuePair<string, string?>> values);
 }
