@@ -94,6 +94,13 @@ public class PluginHostImpl : IPluginHost
         }
     }
 
+    void IPluginHost.UpdateActionName(string currentName, string newName)
+    {
+        var action = PluginActions.FirstOrDefault(a => a.Name == currentName);
+        if (action != null)
+            action.Name = newName;
+    }
+
     // ── 会话管理 ──
 
     public ISession StartSession(string title)

@@ -30,6 +30,9 @@ public interface IPluginHost
     /// <summary>注册一个动作（右键菜单 / 径向菜单均可）</summary>
     void RegisterAction(PluginAction action);
 
+    /// <summary>动态更新已注册动作的显示名称（右键菜单下次打开时生效）</summary>
+    void UpdateActionName(string currentName, string newName);
+
     /// <summary>在宠物气泡中显示文字（标题 + 内容）</summary>
     void ShowThought(string title, string text);
 
