@@ -39,7 +39,7 @@ public class ClaudeCodeMonitorPlugin : PluginBase
         // 注册切换开关（名称根据当前状态）
         host.RegisterAction(new PluginAction
         {
-            Name = host.GetConfig(KeyEnabled) != "false" ? "🔄 切换监测" : "🔴 已关闭 · 点击开启",
+            Name = host.GetConfig(KeyEnabled) != "false" ? "切换监测" : "已关闭 · 点击开启",
             Emoji = "🔄",
             Description = "开启或关闭 Claude Code 活动监测",
             Group = "Claude Code 监测",
@@ -74,7 +74,7 @@ public class ClaudeCodeMonitorPlugin : PluginBase
             _cts = null;
             _host.CancelCurrentTask();
             _host.StopAnimation();
-            _host.UpdateActionName("🔄 切换监测", "🔴 已关闭 · 点击开启");
+            _host.UpdateActionName("切换监测", "已关闭 · 点击开启");
             _host.ShowThought("⏹️ 已关闭", "Claude Code 监测已停止");
         }
         else
@@ -88,7 +88,7 @@ public class ClaudeCodeMonitorPlugin : PluginBase
             LoadKnownSessions();
             _cts = new CancellationTokenSource();
             _ = PollAsync(_cts.Token);
-            _host.UpdateActionName("🔴 已关闭 · 点击开启", "🔄 切换监测");
+            _host.UpdateActionName("已关闭 · 点击开启", "切换监测");
             _host.ShowThought("▶️ 已开启", "Claude Code 监测已启动");
         }
 
@@ -297,22 +297,23 @@ public class ClaudeCodeMonitorPlugin : PluginBase
         catch { }
     }
 
-    // ── 事件处理 ──
+    // ── 事件处理（通过 SDK 队列排队，不打断）──
 
     private void OnSessionStarted(CancellationToken ct)
     {
         if (_host == null) return;
-        _host.ShowThought("💬 Claude Code", "Claude Code 会话已开始");
-        _ = _host.RunWithAnimation(PetAnimation.Wave, async token =>
+        _host.EnqueueThought(new ThoughtMessage
         {
-            await Task.Delay(2000, token);
+            Title = "💬 Claude Code", Text = "Claude Code 会话已开始",
+            DurationMs = 3000,
         });
     }
 
     private void OnSessionEnded()
     {
         if (_host == null) return;
-        _host.CancelCurrentTask(); // 停止可能正在运行的思考动画
+        _host.ClearThoughtQueue();
+        _host.CancelCurrentTask();
         _host.StopAnimation();
         _host.ShowThought("💬 Claude Code", "Claude Code 会话已结束");
     }
@@ -321,35 +322,18 @@ public class ClaudeCodeMonitorPlugin : PluginBase
     {
         if (_host == null) return;
         var preview = content.Length > 120 ? content[..120] + "…" : content;
-        _host.ShowThought("💬 Claude Code", preview);
-        StartThinking();
-    }
-
-    private void OnThinking()
-    {
-        StartThinking();
-    }
-
-    /// <summary>
-    /// 启动/重置思考动画。
-    /// RunWithAnimation 保证 60 秒后自动停止动画（finally 块），不会卡死。
-    /// </summary>
-    private void StartThinking()
-    {
-        if (_host == null) return;
-        _host.CancelCurrentTask(); // 停止前一个动画
-        _ = _host.RunWithAnimation(PetAnimation.Think, async token =>
+        _host.EnqueueThought(new ThoughtMessage
         {
-            await Task.Delay(60_000, token);
+            Title = "💬 Claude Code", Text = preview,
+            DurationMs = 3000,
         });
     }
 
+    private void OnThinking() { }
+
     private void OnAssistantResponse(TranscriptEntry? entry)
     {
-        if (_host == null || entry?.Message?.Content == null) return;
-
-        _host.CancelCurrentTask(); // 停止思考
-
+        if (entry?.Message?.Content == null) return;
         var textParts = new List<string>();
         if (entry.Message.Content is JsonElement arr && arr.ValueKind == JsonValueKind.Array)
         {
@@ -362,15 +346,14 @@ public class ClaudeCodeMonitorPlugin : PluginBase
                 }
             }
         }
-
         var content = string.Join("\n", textParts);
         if (string.IsNullOrEmpty(content)) return;
 
-        var preview = content.Length > 200 ? content[..200] + "…" : content;
-        _host.ShowThought("💬 Claude Code", preview);
-        _ = _host.RunWithAnimation(PetAnimation.Happy, async token =>
+        _host?.EnqueueThought(new ThoughtMessage
         {
-            await Task.Delay(2000, token);
+            Title = "💬 Claude Code",
+            Text = content.Length > 200 ? content[..200] + "…" : content,
+            DurationMs = 6000,
         });
     }
 

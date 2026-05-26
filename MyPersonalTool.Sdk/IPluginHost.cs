@@ -36,6 +36,12 @@ public interface IPluginHost
     /// <summary>在宠物气泡中显示文字（标题 + 内容）</summary>
     void ShowThought(string title, string text);
 
+    /// <summary>排队显示气泡消息，前一条播完再播下一条，不打断</summary>
+    void EnqueueThought(ThoughtMessage message);
+
+    /// <summary>清空未播的消息队列</summary>
+    void ClearThoughtQueue();
+
     /// <summary>显示宠物反应 emoji（短暂弹出在宠物上方）</summary>
     void ShowReaction(string emoji, PetAnimation animation = PetAnimation.Jump);
 

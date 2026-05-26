@@ -24,11 +24,6 @@ public partial class MainViewModel : ObservableObject
         _dispatcher = dispatcher;
         _config = configService.Config;
         _animSpeed = configService.Config.AnimFrameDurationMs;
-        var h = configService.Config.HealthReminder;
-        _healthEnabled = h.Enabled;
-        _sitInterval = h.SitIntervalMinutes;
-        _eyeInterval = h.EyeIntervalMinutes;
-        _drinkInterval = h.DrinkIntervalMinutes;
         _isDarkTheme = configService.Config.IsDarkTheme;
         _config.IsDarkTheme = _isDarkTheme;
 
@@ -72,25 +67,6 @@ public partial class MainViewModel : ObservableObject
         _configService.Save();
         PetEvents.NotifyConfigSaved();
     }
-
-    // ── 健康提醒 ──
-
-    [ObservableProperty]
-    private bool _healthEnabled = true;
-
-    [ObservableProperty]
-    private int _sitInterval = 55;
-
-    [ObservableProperty]
-    private int _eyeInterval = 25;
-
-    [ObservableProperty]
-    private int _drinkInterval = 40;
-
-    partial void OnHealthEnabledChanged(bool value) { Config.HealthReminder.Enabled = value; }
-    partial void OnSitIntervalChanged(int value) { Config.HealthReminder.SitIntervalMinutes = value; }
-    partial void OnEyeIntervalChanged(int value) { Config.HealthReminder.EyeIntervalMinutes = value; }
-    partial void OnDrinkIntervalChanged(int value) { Config.HealthReminder.DrinkIntervalMinutes = value; }
 
     public bool IsHomeSelected => SelectedTabIndex == 0;
     public bool IsSettingsSelected => SelectedTabIndex == 1;

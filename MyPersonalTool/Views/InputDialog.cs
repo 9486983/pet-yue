@@ -74,7 +74,7 @@ public static class InputDialog
             ShowInTaskbar = false,
             Background = Brushes.Transparent,
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowStartupLocation = WindowStartupLocation.Manual,
             Content = new Border
             {
                 Background = new SolidColorBrush(overlayColor),
@@ -131,6 +131,15 @@ public static class InputDialog
                 popup.Close();
             }
         };
+
+        // 可拖拽
+        popup.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(popup).Properties.IsLeftButtonPressed)
+                popup.BeginMoveDrag(e);
+        };
+
+        DialogHelper.PositionAboveOwner(popup, owner, aboveOffset: 280, dialogWidth: 360);
 
         await popup.ShowDialog(owner);
         return result;

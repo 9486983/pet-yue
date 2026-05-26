@@ -2,7 +2,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyPersonalTool.Core.Interfaces;
 using MyPersonalTool.Core.Models;
-using MyPersonalTool.Services;
 using MyPersonalTool.Sdk;
 
 namespace MyPersonalTool.ViewModels;
@@ -12,7 +11,6 @@ public partial class PetViewModel : ObservableObject
     private readonly IConfigService _configService;
     private readonly IPetdexService _petdexService;
     private readonly IDispatcherService _dispatcher;
-    private readonly HealthReminderService? _healthService;
     private readonly Random _random = new();
     private CancellationTokenSource? _pageCts;
 
@@ -155,14 +153,12 @@ public partial class PetViewModel : ObservableObject
 
     public PetViewModel(IConfigService configService, IDispatcherService dispatcher,
         IPetdexService petdexService,
-        HealthReminderService? healthService = null,
         List<PetActionConfig>? pluginActions = null,
         List<FileActionConfig>? fileActions = null)
     {
         _configService = configService;
         _dispatcher = dispatcher;
         _petdexService = petdexService;
-        _healthService = healthService;
 
         // 加载插件注册的文件动作
         if (fileActions != null && fileActions.Count > 0)
@@ -189,32 +185,8 @@ public partial class PetViewModel : ObservableObject
         // 恢复上次激活的默认操作
         RestoreActivatedAction();
 
-        // 启动健康提醒
-        if (healthService != null)
-        {
-            healthService.ReminderTriggered += OnHealthReminder;
-            healthService.Start();
-        }
-
         // 监听配置保存事件（动画速度立即生效）
         PetEvents.ConfigSaved += OnConfigSaved;
-    }
-
-    private void OnHealthReminder(string type, string message)
-    {
-        ThoughtText = message;
-        ThoughtAssistant = type switch
-        {
-            "sit" => "🧘 久坐提醒",
-            "eye" => "👀 用眼提醒",
-            "drink" => "💧 喝水提醒",
-            _ => "⏰ 提醒",
-        };
-        IsShowingThought = true;
-
-        // 6 秒后自动隐藏
-        Task.Delay(6000).ContinueWith(_ =>
-            _dispatcher.Post(() => IsShowingThought = false));
     }
 
     private void OnConfigSaved()
@@ -426,10 +398,5 @@ public partial class PetViewModel : ObservableObject
         _pageCts?.Cancel();
         _pageCts?.Dispose();
         PetEvents.ConfigSaved -= OnConfigSaved;
-        if (_healthService != null)
-        {
-            _healthService.ReminderTriggered -= OnHealthReminder;
-            _healthService.Stop();
-        }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MyPersonalTool.Core.Interfaces;
 using MyPersonalTool.Core.Models;
 using MyPersonalTool.Sdk;
@@ -37,6 +38,12 @@ public class PluginHostImpl : IPluginHost
     /// <summary>显示气泡文字的 UI 回调</summary>
     public Action<string, string>? OnShowThought { get; set; }
 
+    /// <summary>队列消息展示回调（由 Queue 消费者调用，不触发自动隐藏）</summary>
+    public Action<string, string>? OnShowQueuedThought { get; set; }
+
+    /// <summary>隐藏气泡回调</summary>
+    public Action? OnHideThought { get; set; }
+
     /// <summary>显示反应 emoji 的回调</summary>
     public Action<string>? OnShowReaction { get; set; }
 
@@ -49,6 +56,7 @@ public class PluginHostImpl : IPluginHost
 
     private CancellationTokenSource? _currentCts;
     private SessionImpl? _currentSession;
+    private bool _isTaskRunning;
 
     /// <summary>输入框回调</summary>
     public Func<string, string, string?, Task<string?>>? OnShowInputDialog { get; set; }
@@ -62,6 +70,42 @@ public class PluginHostImpl : IPluginHost
     public PluginHostImpl(IConfigService config)
     {
         _config = config;
+    }
+
+    // ── 消息队列 ──
+
+    private readonly ConcurrentQueue<ThoughtMessage> _thoughtQueue = new();
+    private Task? _queueConsumer;
+
+    public void EnqueueThought(ThoughtMessage message)
+    {
+        _thoughtQueue.Enqueue(message);
+        if (_queueConsumer == null || _queueConsumer.IsCompleted)
+            _queueConsumer = ConsumeQueueAsync();
+    }
+
+    public void ClearThoughtQueue()
+    {
+        while (_thoughtQueue.TryDequeue(out _)) { }
+    }
+
+    private async Task ConsumeQueueAsync()
+    {
+        try
+        {
+            while (_thoughtQueue.TryDequeue(out var msg))
+            {
+                while (_isTaskRunning) await Task.Delay(500);
+                try
+                {
+                    OnShowQueuedThought?.Invoke(msg.Title, msg.Text);
+                    await Task.Delay(msg.DurationMs);
+                }
+                catch { /* 单条消息失败不影响后续 */ }
+            }
+            OnHideThought?.Invoke();
+        }
+        catch { /* 消费者崩溃时静默恢复 */ }
     }
 
     public void RegisterAction(PluginAction action)
@@ -192,6 +236,7 @@ public class PluginHostImpl : IPluginHost
 
         _currentCts = new CancellationTokenSource();
         var token = _currentCts.Token;
+        _isTaskRunning = true;
         OnTaskRunningChanged?.Invoke(true);
 
         // 动画轮换循环
@@ -214,6 +259,7 @@ public class PluginHostImpl : IPluginHost
             _currentCts?.Dispose();
             _currentCts = null;
             OnStopAnimation?.Invoke();
+            _isTaskRunning = false;
             OnTaskRunningChanged?.Invoke(false);
         }
     }

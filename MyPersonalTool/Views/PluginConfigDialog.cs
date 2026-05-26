@@ -260,7 +260,7 @@ public static class PluginConfigDialog
             ShowInTaskbar = false,
             Background = Brushes.Transparent,
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowStartupLocation = WindowStartupLocation.Manual,
             Content = new Border
             {
                 Background = new SolidColorBrush(overlayColor),
@@ -325,7 +325,18 @@ public static class PluginConfigDialog
                 saveBtn.RaiseEvent(new KeyEventArgs { Key = Key.Enter });
         };
 
+        // 点击弹窗任意位置可拖拽（无标题栏）
+        popup.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(popup).Properties.IsLeftButtonPressed)
+                popup.BeginMoveDrag(e);
+        };
+
+        // 定位到宠物窗口上方，防止溢出屏幕底部
+        DialogHelper.PositionAboveOwner(popup, owner, aboveOffset: 320);
+
         await popup.ShowDialog(owner);
+        return;
     }
 
     private static Color TryGetColor(string key, uint fallback)

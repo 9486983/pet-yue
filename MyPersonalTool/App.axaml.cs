@@ -37,7 +37,6 @@ public partial class App : Application
             services.AddSingleton<IConfigService, ConfigService>();
             services.AddSingleton<IDispatcherService, AvaloniaDispatcherService>();
             services.AddSingleton<IPetdexService, PetdexService>();
-            services.AddSingleton<HealthReminderService>();
             services.AddSingleton<PluginHostImpl>();
             services.AddSingleton<PluginLoader>();
 
@@ -50,7 +49,6 @@ public partial class App : Application
             var configService = _serviceProvider.GetRequiredService<IConfigService>();
             var dispatcher = _serviceProvider.GetRequiredService<IDispatcherService>();
             var petdexService = _serviceProvider.GetRequiredService<IPetdexService>();
-            var healthService = _serviceProvider.GetRequiredService<HealthReminderService>();
             var pluginHost = _serviceProvider.GetRequiredService<PluginHostImpl>();
             var pluginLoader = _serviceProvider.GetRequiredService<PluginLoader>();
             var config = configService.Config;
@@ -73,7 +71,7 @@ public partial class App : Application
 
             // ── 宠物窗口 ──
             var petVm = new PetViewModel(configService, dispatcher, petdexService,
-                healthService, pluginHost.PluginActions,
+                pluginHost.PluginActions,
                 pluginHost.FileActions);
             PetViewModel = petVm;
             var petWindow = new PetWindow
@@ -85,6 +83,16 @@ public partial class App : Application
             // ── 连接插件气泡回调 ──
             pluginHost.OnShowThought = (title, text) =>
                 petVm.ShowFileDropInfo(title, text);
+            pluginHost.OnShowQueuedThought = (title, text) =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    petVm.ThoughtAssistant = title;
+                    petVm.ThoughtText = text;
+                    petVm.IsShowingThought = true;
+                });
+            pluginHost.OnHideThought = () =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    petVm.IsShowingThought = false);
             pluginHost.OnShowReaction = emoji =>
                 petVm.ShowReaction(emoji);
             pluginHost.OnStartAnimation = anim =>
