@@ -331,6 +331,9 @@ public partial class PetViewModel : ObservableObject
         });
         Task.Delay(2000).ContinueWith(_ =>
             _dispatcher.Post(() => IsReacting = false));
+        // 动画行复位：表情气泡消失时同时恢复待机
+        Task.Delay(2000).ContinueWith(_ =>
+            _dispatcher.Post(() => AnimCurrentRow = 0));
     }
 
     /// <summary>在对话气泡中显示信息，多行内容自动分页轮播（每批最多 3 行，2 秒切换）</summary>
