@@ -5,31 +5,36 @@ namespace MyPersonalTool.Views;
 
 internal static class DialogHelper
 {
-    /// <summary>将弹窗定位到宠物旁边，优先上方，空间不足时自动切换方向</summary>
     public static void PositionAboveOwner(Window popup, Window owner, int aboveOffset = 300, int dialogWidth = 380)
     {
         const int margin = 10;
         var screen = owner.Screens.ScreenFromWindow(owner);
         if (screen == null) { popup.WindowStartupLocation = WindowStartupLocation.CenterScreen; return; }
 
-        var wa = screen.WorkingArea;
-        var dlgH = Math.Min(400, wa.Height - margin * 2); // 预估弹窗高度
+        // screen.Bounds 和 Window.Position 都是 DIPs，同一坐标系无需转换
+        var scrLeft = screen.Bounds.X;
+        var scrRight = screen.Bounds.X + screen.Bounds.Width;
+        var scrTop = screen.Bounds.Y;
+        var scrBottom = screen.Bounds.Y + screen.Bounds.Height;
 
-        // 水平：默认居中于宠物，右侧溢出则靠右，左侧溢出则靠左
+        // 水平：居中 → 右对齐宠物 → 贴屏幕（三级降级）
         var x = owner.Position.X + (int)((owner.Width - dialogWidth) / 2);
-        if (x + dialogWidth + margin > wa.X + wa.Width)
-            x = wa.X + wa.Width - dialogWidth - margin;
-        if (x < wa.X + margin)
-            x = wa.X + margin;
+        if (x + dialogWidth + margin > scrRight)
+        {
+            x = owner.Position.X + (int)owner.Width - dialogWidth - margin;
+            if (x + dialogWidth + margin > scrRight)
+                x = scrRight - dialogWidth - margin;
+        }
+        if (x < scrLeft + margin)
+            x = scrLeft + margin;
 
-        // 纵向：上方优先，空间不足则下方
+        // 纵向：上方优先 → 下方 → 贴屏幕
+        var dlgH = 420;
         var y = owner.Position.Y - aboveOffset;
-        if (y < wa.Y + margin)
+        if (y < scrTop + margin)
             y = owner.Position.Y + (int)owner.Height + margin;
-
-        // 底部溢出保护
-        if (y + dlgH > wa.Y + wa.Height - margin)
-            y = wa.Y + wa.Height - dlgH - margin;
+        if (y + dlgH + margin > scrBottom)
+            y = scrBottom - dlgH - margin;
 
         popup.Position = new PixelPoint(x, y);
     }
