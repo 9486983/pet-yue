@@ -64,7 +64,7 @@ public class WebAnalyzerPlugin : PluginBase
         {
             Name = "设置",
             Emoji = "⚙️",
-            Group = "网页分析器",
+            Group = "🌐 网页分析器",
             Target = ActionTarget.ContextMenu,
             Callback = () =>
             {
@@ -79,7 +79,7 @@ public class WebAnalyzerPlugin : PluginBase
             Name = "分析网页",
             Emoji = "🌐",
             Description = "抓取网页内容并用 AI 生成 Markdown 分析报告",
-            Group = "网页分析器",
+            Group = "🌐 网页分析器",
             Target = ActionTarget.ContextMenu,
             Callback = async () => await AnalyzeUrl(),
         });

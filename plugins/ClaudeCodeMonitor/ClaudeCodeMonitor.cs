@@ -42,7 +42,7 @@ public class ClaudeCodeMonitorPlugin : PluginBase
             Name = host.GetConfig(KeyEnabled) != "false" ? "切换监测" : "已关闭 · 点击开启",
             Emoji = "🔄",
             Description = "开启或关闭 Claude Code 活动监测",
-            Group = "Claude Code 监测",
+            Group = "💬 Claude Code 监测",
             Target = ActionTarget.ContextMenu,
             Callback = ToggleMonitoring,
         });

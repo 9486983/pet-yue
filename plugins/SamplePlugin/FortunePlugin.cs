@@ -41,7 +41,7 @@ public class FortunePlugin : PluginBase
             Name = "抽运势",
             Emoji = "🔮",
             Description = "看看今天的幸运签",
-            Group = "每日运势",
+            Group = "🔮 每日运势",
             Target = ActionTarget.ContextMenu,
             Callback = async () =>
             {
@@ -55,7 +55,7 @@ public class FortunePlugin : PluginBase
             Name = "夸夸我",
             Emoji = "🌟",
             Description = "让宠物夸你一句",
-            Group = "每日运势",
+            Group = "🔮 每日运势",
             Target = ActionTarget.ContextMenu,
             Callback = async () =>
             {

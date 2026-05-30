@@ -85,7 +85,7 @@ public class DeepSeekQueryPlugin : PluginBase
             Name = "设置",
             Emoji = "⚙️",
             Description = "配置 DeepSeek API Key 和定时查询参数",
-            Group = "DeepSeek",
+            Group = "🔑 DeepSeek",
             Target = ActionTarget.ContextMenu,
             Callback = () =>
             {
@@ -99,7 +99,7 @@ public class DeepSeekQueryPlugin : PluginBase
             Name = "查询余额",
             Emoji = "💰",
             Description = "查询 DeepSeek API 余额",
-            Group = "DeepSeek",
+            Group = "🔑 DeepSeek",
             Target = ActionTarget.ContextMenu,
             Callback = async () => await QueryBalance(),
         });
@@ -109,7 +109,7 @@ public class DeepSeekQueryPlugin : PluginBase
             Name = "缓存命中测试",
             Emoji = "⚡",
             Description = "发送两次请求对比缓存命中率",
-            Group = "DeepSeek",
+            Group = "🔑 DeepSeek",
             Target = ActionTarget.ContextMenu,
             Callback = async () => await TestCache(),
         });

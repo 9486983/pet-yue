@@ -89,7 +89,7 @@ public class HealthReminderPlugin : PluginBase
         {
             Name = "设置",
             Emoji = "⚙️",
-            Group = "健康提醒",
+            Group = "🧘 健康提醒",
             Target = ActionTarget.ContextMenu,
             Callback = () =>
             {
