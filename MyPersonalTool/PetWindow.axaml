@@ -59,6 +59,16 @@
       </Border>
     </Popup>
 
+    <!-- Dialog 弹窗层（确认框/输入框等交互） -->
+    <Popup x:Name="DialogPopup"
+           Placement="Top"
+           PlacementTarget="{Binding ElementName=PetBody}"
+           HorizontalOffset="0"
+           VerticalOffset="-8"
+           WindowManagerAddShadowHint="False">
+      <ContentControl x:Name="DialogContent" />
+    </Popup>
+
     <!-- 右上角状态区：💡 / 📋 或 进度环 -->
     <!-- 💡：普通激活无任务 ｜ 📋：会话中无任务 -->
     <Border Width="20" Height="20"

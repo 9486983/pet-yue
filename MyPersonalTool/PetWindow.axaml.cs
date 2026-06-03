@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -21,6 +22,24 @@ public partial class PetWindow : Window
         var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
         t.Tick += (_, _) => { if (IsVisible) Topmost = true; };
         t.Start();
+    }
+
+    /// <summary>气泡定位目标（供弹窗 Popup 定位用）</summary>
+    public Control BubbleTarget => PetBody;
+
+    /// <summary>在 DialogPopup 中显示内容，返回控制权</summary>
+    public Popup ShowDialog(Control content)
+    {
+        DialogContent.Content = content;
+        DialogPopup.IsOpen = true;
+        return DialogPopup;
+    }
+
+    public static Popup ShowDialogOn(Window owner, Control content)
+    {
+        if (owner is PetWindow pw)
+            return pw.ShowDialog(content);
+        return null!; // 非 PetWindow 时不应调用
     }
 
     protected override void OnDataContextChanged(EventArgs e)

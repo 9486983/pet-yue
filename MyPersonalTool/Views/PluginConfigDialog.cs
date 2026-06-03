@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -17,12 +18,10 @@ public static class PluginConfigDialog
     public static async Task ShowAsync(Window owner, PluginConfigSection section,
         Func<string, string?> getValue, Action<Dictionary<string, string?>> onSave)
     {
-        var overlayColor = TryGetColor("BgOverlay", 0xCCF0ECE3);
-        var borderColor = TryGetColor("BorderColor", 0xFFc4b89e);
-        var fgColor = TryGetColor("TextPrimary", 0xFF794f27);
-        var mutedColor = TryGetColor("TextMuted", 0xFF9f927d);
-        var accentColor = TryGetColor("AccentPrimary", 0xFF19c8b9);
-        var bgPage = TryGetColor("BgPage", 0xFFF5F0E8);
+        var fgColor = DialogHelper.GetColor("TextPrimary", 0xFF794f27);
+        var mutedColor = DialogHelper.GetColor("TextMuted", 0xFF9f927d);
+        var borderColor = DialogHelper.GetColor("BorderColor", 0xFFc4b89e);
+        var bgPage = DialogHelper.GetColor("BgPage", 0xFFF5F0E8);
 
         // ── 动态生成字段控件 ──
         var fieldControls = new List<(PluginConfigField Field, Control Control)>();
@@ -202,37 +201,8 @@ public static class PluginConfigDialog
         }
 
         // ── 按钮 ──
-        var saveBtn = new Button
-        {
-            Content = "💾 保存",
-            Width = 100,
-            Height = 34,
-            CornerRadius = new CornerRadius(8),
-            Background = new SolidColorBrush(accentColor),
-            Foreground = Brushes.White,
-            BorderThickness = new Thickness(0),
-            FontSize = 13,
-            Padding = new Thickness(6, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-            Cursor = new Cursor(StandardCursorType.Hand),
-        };
-        var cancelBtn = new Button
-        {
-            Content = "取消",
-            Width = 100,
-            Height = 34,
-            CornerRadius = new CornerRadius(8),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(borderColor),
-            Foreground = new SolidColorBrush(mutedColor),
-            FontSize = 13,
-            Padding = new Thickness(6, 0),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-            Cursor = new Cursor(StandardCursorType.Hand),
-        };
+        var saveBtn = DialogHelper.CreateButton("💾 保存", width: 100, primary: true);
+        var cancelBtn = DialogHelper.CreateButton("取消", width: 100);
 
         // ── 构建窗口 ──
         var scrollViewer = new ScrollViewer
@@ -250,49 +220,25 @@ public static class PluginConfigDialog
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        var popup = new Window
+        var grid = new Grid
         {
-            Width = 380,
-            Height = 0, // auto-size via content
-            SizeToContent = SizeToContent.Height,
-            WindowDecorations = WindowDecorations.None,
-            CanResize = false,
-            ShowInTaskbar = false,
-            Background = Brushes.Transparent,
-            TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
-            WindowStartupLocation = WindowStartupLocation.Manual,
-            Content = new Border
+            RowDefinitions = new RowDefinitions("Auto,*,Auto"),
+            Children =
             {
-                Background = new SolidColorBrush(overlayColor),
-                BorderBrush = new SolidColorBrush(borderColor),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
-                Margin = new Thickness(8),
-                BoxShadow = new BoxShadows(new BoxShadow
+                titleBlock.WithGridRow(0),
+                scrollViewer.WithGridRow(1),
+                new StackPanel
                 {
-                    OffsetX = 0, OffsetY = 4, Blur = 20,
-                    Color = Color.Parse("#40000000"),
-                }),
-                Child = new Grid
-                {
-                    RowDefinitions = new RowDefinitions("Auto,*,Auto"),
-                    Margin = new Thickness(16),
-                    Children =
-                    {
-                        titleBlock.WithGridRow(0),
-                        scrollViewer.WithGridRow(1),
-                        new StackPanel
-                        {
-                            HorizontalAlignment = HorizontalAlignment.Right,
-                            Orientation = Orientation.Horizontal,
-                            Spacing = 8,
-                            Margin = new Thickness(0, 8, 0, 0),
-                            Children = { cancelBtn, saveBtn },
-                        }.WithGridRow(2),
-                    },
-                },
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    Margin = new Thickness(0, 8, 0, 0),
+                    Children = { cancelBtn, saveBtn },
+                }.WithGridRow(2),
             },
         };
+
+        var tcs = new TaskCompletionSource<bool>();
 
         // ── 事件 ──
         saveBtn.Click += (_, _) =>
@@ -313,37 +259,31 @@ public static class PluginConfigDialog
             }
             if (changed.Count > 0)
                 onSave(changed);
-            popup.Close();
+            tcs.TrySetResult(true);
         };
 
-        cancelBtn.Click += (_, _) => popup.Close();
+        cancelBtn.Click += (_, _) => tcs.TrySetResult(false);
 
-        popup.KeyDown += (_, e) =>
+        // ── Popup 展示 ──
+        var border = new Border
         {
-            if (e.Key == Key.Escape) popup.Close();
-            if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None)
-                saveBtn.RaiseEvent(new KeyEventArgs { Key = Key.Enter });
+            Background = new SolidColorBrush(DialogHelper.GetColor("BgOverlay", 0xCCF0ECE3)),
+            BorderBrush = new SolidColorBrush(DialogHelper.GetColor("BorderColor", 0xFFc4b89e)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(14, 8),
+            BoxShadow = new BoxShadows(new BoxShadow
+            {
+                OffsetX = 0, OffsetY = 2, Blur = 8,
+                Color = Color.Parse("#30000000"),
+            }),
+            Child = grid,
         };
 
-        // 点击弹窗任意位置可拖拽（无标题栏）
-        popup.PointerPressed += (_, e) =>
-        {
-            if (e.GetCurrentPoint(popup).Properties.IsLeftButtonPressed)
-                popup.BeginMoveDrag(e);
-        };
+        var popup = PetWindow.ShowDialogOn(owner, border);
 
-        // 定位到宠物窗口上方，防止溢出屏幕底部
-        DialogHelper.PositionAboveOwner(popup, owner, aboveOffset: 320);
-
-        await popup.ShowDialog(owner);
-        return;
-    }
-
-    private static Color TryGetColor(string key, uint fallback)
-    {
-        if (Application.Current?.TryFindResource(key, out var value) == true && value is Color c)
-            return c;
-        return Color.Parse($"#{fallback:X8}");
+        try { await tcs.Task; }
+        finally { if (popup != null) popup.IsOpen = false; }
     }
 
     /// <summary>附加属性扩展：设置 Grid.Row / Grid.Column</summary>
