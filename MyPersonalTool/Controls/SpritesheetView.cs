@@ -8,12 +8,13 @@ using SkiaSharp;
 namespace MyPersonalTool.Controls;
 
 /// <summary>
-/// 精灵图表动画控件 —— 自动跳过空白帧，消除因空单元格导致的闪烁
+/// 精灵图表动画控件 —— 实时裁切帧，无需预缓存全部 Bitmap。
+/// 只保留一张完整精灵图，渲染时 GPU 裁切，内存省 ~10MB。
 /// </summary>
 public class SpritesheetView : Control
 {
-    private Bitmap[] _frames = [];
-    private int[] _framesPerRow = []; // 每行实际有效帧数
+    private Bitmap? _sheet;          // 完整精灵图（唯一大头内存）
+    private int[] _framesPerRow = []; // 每行有效帧数
     private int _currentFrame;
     private DispatcherTimer? _timer;
 
@@ -73,7 +74,6 @@ public class SpritesheetView : Control
         set => SetValue(FrameDurationMsProperty, value);
     }
 
-    /// <summary>当前行实际帧数（跳过空白帧后的有效值）</summary>
     private int CurrentRowFrameCount
     {
         get
@@ -88,8 +88,6 @@ public class SpritesheetView : Control
     /// <summary>第一帧中第一行非空白像素在帧坐标系中的 Y 坐标</summary>
     public int ContentTopY { get; private set; } = -1;
 
-    // ── 构造 ──
-
     public SpritesheetView()
     {
         ClipToBounds = true;
@@ -99,8 +97,6 @@ public class SpritesheetView : Control
     {
         AffectsRender<SpritesheetView>(SpritesheetProperty, CurrentRowProperty);
     }
-
-    // ── 属性变化 ──
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
@@ -115,7 +111,6 @@ public class SpritesheetView : Control
         }
         else if (change.Property == FrameDurationMsProperty)
         {
-            // 直接改定时器间隔，不反复停启
             if (_timer != null)
                 _timer.Interval = TimeSpan.FromMilliseconds(FrameDurationMs);
         }
@@ -124,7 +119,7 @@ public class SpritesheetView : Control
     private void OnSpritesheetChanged()
     {
         StopAnimation();
-        ClearFrames();
+        FreeSheet();
         _currentFrame = 0;
         _framesPerRow = [];
 
@@ -135,103 +130,72 @@ public class SpritesheetView : Control
         {
             using var src = SKBitmap.Decode(path);
             if (src == null) return;
-            PrecacheFrames(src);
+
+            // 只保留一张完整精灵图
+            using var ms = new MemoryStream();
+            src.Encode(ms, SKEncodedImageFormat.Png, 100);
+            ms.Position = 0;
+            _sheet = new Bitmap(ms);
+
+            // 检测每行有效帧数
+            _framesPerRow = ComputeFramesPerRow(src, FrameWidth, FrameHeight);
+
+            // 检测可见内容顶部 Y
+            ContentTopY = FindContentTopY(src, 0, 0, FrameWidth, FrameHeight);
+
             InvalidateVisual();
             StartAnimation();
         }
         catch { }
     }
 
-    /// <summary>
-    /// 用 SkiaSharp 提取每帧并检测空白帧。
-    /// 只有含非透明像素的帧才计入有效帧数，尾部的空白帧被跳过。
-    /// </summary>
-    private void PrecacheFrames(SKBitmap src)
+    /// <summary>计算每行有效帧数（跳过尾部空白帧）</summary>
+    private static int[] ComputeFramesPerRow(SKBitmap src, int fw, int fh)
     {
-        var fw = FrameWidth;
-        var fh = FrameHeight;
-        var cols = Columns;
-        var rows = 9;
+        var result = new int[9];
 
-        // 提取所有帧并检测内容
-        var allFrameBitmaps = new Bitmap[rows * cols];
-        var rowFrameCounts = new int[rows];
-
-        for (var r = 0; r < rows; r++)
-            rowFrameCounts[r] = cols; // 默认全部有效
-
-        // 第一遍：提取 + 检测空白
-        for (var r = 0; r < rows; r++)
+        for (var r = 0; r < result.Length; r++)
         {
             var lastNonBlank = -1;
-            for (var c = 0; c < cols; c++)
+            for (var c = 0; c < 8; c++)
             {
-                using var frameSk = new SKBitmap(fw, fh);
-                src.ExtractSubset(frameSk, new SKRectI(c * fw, r * fh, (c + 1) * fw, (r + 1) * fh));
-
-                // 像素级检测：是否有非透明内容
-                if (HasContent(frameSk))
+                using var frame = new SKBitmap(fw, fh);
+                src.ExtractSubset(frame, new SKRectI(c * fw, r * fh, (c + 1) * fw, (r + 1) * fh));
+                if (HasContent(frame))
                     lastNonBlank = c;
-
-                // 编码为 PNG 内存流 → Avalonia Bitmap
-                using var ms = new MemoryStream();
-                frameSk.Encode(ms, SKEncodedImageFormat.Png, 100);
-                ms.Position = 0;
-                allFrameBitmaps[r * cols + c] = new Bitmap(ms);
             }
-
-            // 有效帧数 = 最后一个有内容的列 + 1（至少 1 帧）
-            rowFrameCounts[r] = Math.Max(1, lastNonBlank + 1);
+            result[r] = Math.Max(1, lastNonBlank + 1);
         }
-
-        _frames = allFrameBitmaps;
-        _framesPerRow = rowFrameCounts;
-
-        // 检测第一帧（空闲帧）的可见内容顶部 Y
-        ContentTopY = FindContentTopY(src, 0, 0, fw, fh);
+        return result;
     }
 
-    /// <summary>检测帧中首个非空白行的 Y 坐标（帧坐标系）</summary>
     private static int FindContentTopY(SKBitmap src, int col, int row, int fw, int fh)
     {
         using var frame = new SKBitmap(fw, fh);
         src.ExtractSubset(frame, new SKRectI(col * fw, row * fh, (col + 1) * fw, (row + 1) * fh));
 
-        var step = Math.Max(1, fh / 20); // 隔行采样加速
+        var step = Math.Max(1, fh / 20);
         for (var y = 0; y < fh; y += step)
-        {
             for (var x = 0; x < fw; x += Math.Max(1, fw / 10))
-            {
                 if (frame.GetPixel(x, y).Alpha > 30)
                     return y;
-            }
-        }
-        return -1; // 全空白
+        return -1;
     }
 
-    /// <summary>检查 SKBitmap 中是否有非透明像素</summary>
     private static bool HasContent(SKBitmap bmp)
     {
-        // 快速检查：隔点采样，加速检测
         var step = Math.Max(1, Math.Min(bmp.Width, bmp.Height) / 8);
         for (var y = 0; y < bmp.Height; y += step)
-        {
             for (var x = 0; x < bmp.Width; x += step)
-            {
-                var pixel = bmp.GetPixel(x, y);
-                if (pixel.Alpha > 30) // 有可见内容
+                if (bmp.GetPixel(x, y).Alpha > 30)
                     return true;
-            }
-        }
         return false;
     }
 
-    private void ClearFrames()
+    private void FreeSheet()
     {
-        foreach (var f in _frames)
-            f?.Dispose();
-        _frames = [];
-        _framesPerRow = [];
+        _sheet?.Dispose();
+        _sheet = null;
     }
 
     // ── 定时器 ──
@@ -259,21 +223,26 @@ public class SpritesheetView : Control
 
     private void OnTimerTick(object? sender, EventArgs e)
     {
-        if (_frames.Length == 0) return;
+        if (_sheet == null) return;
         var count = CurrentRowFrameCount;
         _currentFrame = (_currentFrame + 1) % count;
         InvalidateVisual();
     }
 
-    // ── 渲染 ──
+    // ── 渲染（实时裁切，无预缓存帧）──
 
     public override void Render(DrawingContext context)
     {
-        var row = CurrentRow;
-        var cols = Columns;
-        var idx = row * cols + _currentFrame;
-        if (idx < 0 || idx >= _frames.Length || _frames[idx] == null) return;
-        context.DrawImage(_frames[idx], new Rect(Bounds.Size));
+        if (_sheet == null) return;
+
+        var fw = FrameWidth;
+        var fh = FrameHeight;
+        var sx = _currentFrame * fw;
+        var sy = CurrentRow * fh;
+
+        context.DrawImage(_sheet,
+            new Rect(sx, sy, fw, fh),
+            new Rect(Bounds.Size));
     }
 
     // ── 清理 ──
@@ -282,6 +251,6 @@ public class SpritesheetView : Control
     {
         base.OnDetachedFromVisualTree(e);
         StopAnimation();
-        ClearFrames();
+        FreeSheet();
     }
 }

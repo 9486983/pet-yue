@@ -134,7 +134,7 @@ public class HealthReminderPlugin : PluginBase
     private void CheckReminders()
     {
         if (_host == null) return;
-        if (_host.GetConfig(KeyEnabled) != "true") return;
+        if (_host.GetConfig(KeyEnabled) == "false") return;
 
         var now = DateTime.Now;
 
