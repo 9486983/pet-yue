@@ -13,15 +13,13 @@ internal class OverlayManager
     private readonly Dictionary<IntPtr, IntPtr[]> _overlays = new();
     private IntPtr _msgWnd;
 
-    // ── 事件钩子引用（需保持存活） ──
+    // ── 事件钩子引用 ──
     public WinEventDelegate? DestroyHandler { get; private set; }
     public WinEventDelegate? LocationHandler { get; private set; }
-    public WinEventDelegate? ForegroundHandler { get; private set; }
-    public WinEventDelegate? FocusHandler { get; private set; }
+    public WinEventDelegate? ShowHideHandler { get; private set; }
     public IntPtr DestroyHook { get; set; }
     public IntPtr LocationHook { get; set; }
-    public IntPtr ForegroundHook { get; set; }
-    public IntPtr FocusHook { get; set; }
+    public IntPtr ShowHideHook { get; set; }
 
     public string OverlayClassName { get; set; } = "";
 
@@ -34,19 +32,14 @@ internal class OverlayManager
     {
         DestroyHandler = OnWindowDestroyed;
         LocationHandler = OnLocationChanged;
-        ForegroundHandler = OnForegroundChanged;
-        FocusHandler = OnFocus;
+        ShowHideHandler = OnWindowShowHide;
 
         DestroyHook = SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_DESTROY,
             IntPtr.Zero, DestroyHandler, 0, 0, WINEVENT_OUTOFCONTEXT);
         LocationHook = SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE,
             IntPtr.Zero, LocationHandler, 0, 0, WINEVENT_OUTOFCONTEXT);
-        // 窗口激活（Alt+Tab / 点击标题栏）
-        ForegroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
-            IntPtr.Zero, ForegroundHandler, 0, 0, WINEVENT_OUTOFCONTEXT);
-        // 键盘聚焦（点击窗口内编辑框等控件）
-        FocusHook = SetWinEventHook(EVENT_OBJECT_FOCUS, EVENT_OBJECT_FOCUS,
-            IntPtr.Zero, FocusHandler, 0, 0, WINEVENT_OUTOFCONTEXT);
+        ShowHideHook = SetWinEventHook(EVENT_OBJECT_HIDE, EVENT_OBJECT_SHOW,
+            IntPtr.Zero, ShowHideHandler, 0, 0, WINEVENT_OUTOFCONTEXT);
     }
 
     public void RefreshAll(OverlayConfig cfg, string styleName, IntPtr msgWnd)
@@ -101,12 +94,28 @@ internal class OverlayManager
         _style.Remove(overlays);
     }
 
+    public void HideOverlay(IntPtr targetHwnd)
+    {
+        if (_overlays.TryGetValue(targetHwnd, out var overlays))
+            foreach (var h in overlays)
+                if (h != IntPtr.Zero) ShowWindow(h, 0);
+    }
+
+    public void ShowOverlay(IntPtr targetHwnd)
+    {
+        if (_overlays.TryGetValue(targetHwnd, out var overlays))
+        {
+            foreach (var h in overlays)
+                if (h != IntPtr.Zero) ShowWindow(h, 8);
+            _style.Update(targetHwnd, overlays, _cfg);
+        }
+    }
+
     public void Cleanup()
     {
         if (DestroyHook != IntPtr.Zero) { UnhookWinEvent(DestroyHook); DestroyHook = IntPtr.Zero; }
         if (LocationHook != IntPtr.Zero) { UnhookWinEvent(LocationHook); LocationHook = IntPtr.Zero; }
-        if (ForegroundHook != IntPtr.Zero) { UnhookWinEvent(ForegroundHook); ForegroundHook = IntPtr.Zero; }
-        if (FocusHook != IntPtr.Zero) { UnhookWinEvent(FocusHook); FocusHook = IntPtr.Zero; }
+        if (ShowHideHook != IntPtr.Zero) { UnhookWinEvent(ShowHideHook); ShowHideHook = IntPtr.Zero; }
 
         foreach (var kv in _overlays.ToList())
         {
@@ -117,6 +126,13 @@ internal class OverlayManager
     }
 
     // ── 事件回调 ──
+
+    private void OnLocationChanged(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime)
+    {
+        if (idObj != 0) return;
+        try { Update(hwnd); }
+        catch { }
+    }
 
     private void OnWindowDestroyed(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime)
     {
@@ -129,34 +145,13 @@ internal class OverlayManager
         }
     }
 
-    private void OnLocationChanged(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime)
+    private void OnWindowShowHide(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime)
     {
-        if (idObj != 0) return;
-        try { Update(hwnd); }
-        catch { }
-    }
+        if (idObj != 0 || !_pinned.Contains(hwnd)) return;
 
-    private void OnForegroundChanged(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime)
-    {
-        if (idObj != 0) return;
-        ReTopmost(hwnd);
-    }
-
-    private void OnFocus(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime)
-    {
-        // idObj 可能为 0（窗口聚焦）或子元素 ID（控件聚焦），都视为该窗口被激活
-        ReTopmost(hwnd);
-    }
-
-    private void ReTopmost(IntPtr hwnd)
-    {
-        if (_pinned.Contains(hwnd))
-        {
-            try
-            {
-                SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            }
-            catch { }
-        }
+        if (evt == EVENT_OBJECT_HIDE)
+            HideOverlay(hwnd);
+        else if (evt == EVENT_OBJECT_SHOW)
+            ShowOverlay(hwnd);
     }
 }

@@ -45,6 +45,7 @@ public class PinTopPlugin : PluginBase
                 new() { Key = "pt_border_color", Label = "边框颜色 (#RRGGBB)", Type = PluginConfigFieldType.String, DefaultValue = "#FFD700" },
                 new() { Key = "pt_border_alpha", Label = "边框透明度 (0-255)", Type = PluginConfigFieldType.Number, DefaultValue = "140", MinValue = 0, MaxValue = 255 },
                 new() { Key = "pt_border_thickness", Label = "边框粗细 (像素)", Type = PluginConfigFieldType.Number, DefaultValue = "3", MinValue = 1, MaxValue = 20 },
+                new() { Key = "pt_border_radius", Label = "边框圆角 (像素)", Type = PluginConfigFieldType.Number, DefaultValue = "8", MinValue = 0, MaxValue = 30 },
             }}, Name);
         host.RegisterAction(new PluginAction { Name = "设置", Emoji = "📌", Group = "📌 窗口置顶器", Target = ActionTarget.ContextMenu,
             Callback = () => { host.ShowConfigDialog("窗口置顶器"); return Task.CompletedTask; } });
@@ -75,6 +76,9 @@ public class PinTopPlugin : PluginBase
     {
         if (_host != null) _host.ConfigValueChanged -= OnConfigChanged;
 
+        if (_msgWnd != IntPtr.Zero)
+            KillTimer(_msgWnd, FOCUS_TIMER_ID);
+
         _overlayMgr.Cleanup();
 
         foreach (var h in _pinned.ToList())
@@ -103,6 +107,7 @@ public class PinTopPlugin : PluginBase
         }
         if (byte.TryParse(host.GetConfig("pt_border_alpha") ?? "140", out var a)) _overlayCfg.Alpha = a;
         if (int.TryParse(host.GetConfig("pt_border_thickness") ?? "3", out var t) && t >= 1) _overlayCfg.Thickness = t;
+        if (int.TryParse(host.GetConfig("pt_border_radius") ?? "8", out var radius) && radius >= 0) _overlayCfg.Radius = radius;
     }
 
     private bool IsBorderEnabled() => (_host?.GetConfig("pt_border_enabled") ?? "true") != "false";
@@ -111,7 +116,7 @@ public class PinTopPlugin : PluginBase
     private void OnConfigChanged(object? sender, string key)
     {
         if (key is not ("pt_border_enabled" or "pt_border_style" or "pt_border_color"
-            or "pt_border_alpha" or "pt_border_thickness")) return;
+            or "pt_border_alpha" or "pt_border_thickness" or "pt_border_radius")) return;
 
         LoadOverlaySettings();
         if (_msgWnd != IntPtr.Zero)
@@ -153,10 +158,13 @@ public class PinTopPlugin : PluginBase
                 // 注册事件钩子
                 _overlayMgr.RegisterEventHandlers();
 
-                // 初始化 overlay 系统：创建画刷、配置 classname 和 msgWnd
+                // 初始化 overlay 系统
                 _overlayCfg.ClassName = _overlayMgr.OverlayClassName;
                 _overlayCfg.StyleName = BorderStyleName();
                 _overlayMgr.RefreshAll(_overlayCfg, IsBorderEnabled() ? BorderStyleName() : "none", _msgWnd);
+
+                // 启动聚焦轮询（每 200ms 检查前台窗口是否为置顶窗口）
+                SetTimer(_msgWnd, FOCUS_TIMER_ID, 200, IntPtr.Zero);
 
                 while (GetMessage(out var m, IntPtr.Zero, 0, 0) != 0)
                 {
@@ -209,6 +217,19 @@ public class PinTopPlugin : PluginBase
             catch { }
             return IntPtr.Zero;
         }
+        if (m == WM_TIMER && w == FOCUS_TIMER_ID)
+        {
+            try
+            {
+                // 前台窗口若是置顶窗口，提到 TOPMOST 组最前
+                var fg = GetForegroundWindow();
+                if (fg != IntPtr.Zero && _pinned.Contains(fg))
+                    SetWindowPos(fg, HWND_TOP, 0, 0, 0, 0,
+                        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+            catch { }
+            return IntPtr.Zero;
+        }
         return DefWindowProcW(h, m, w, l);
     }
 
@@ -240,14 +261,21 @@ public class PinTopPlugin : PluginBase
 
         if (_pinned.Contains(hwnd))
         {
-            SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            // 移除 TOPMOST 样式（不移动窗口，减少 DWM 干扰）
+            int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, ex & ~WS_EX_TOPMOST);
+
             _pinned.Remove(hwnd);
             _overlayMgr.Remove(hwnd);
             host.ShowThought("📌 已取消", GetTitle(hwnd));
         }
         else
         {
-            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            if (!SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE))
+            {
+                host.ShowThought("❌ 置顶失败", $"无法置顶“{GetTitle(hwnd)}”，权限不足或窗口不支持");
+                return;
+            }
             _pinned.Add(hwnd);
             if (IsBorderEnabled())
             {

@@ -22,6 +22,7 @@ internal class OverlayConfig
     public uint ColorBgr { get; set; } = 0x00D7FF;   // BGR
     public byte Alpha { get; set; } = 140;
     public int Thickness { get; set; } = 3;
+    public int Radius { get; set; } = 8;
     public string StyleName { get; set; } = "border";
     public string ClassName { get; set; } = "";
     public IntPtr Brush { get; set; } = IntPtr.Zero;
