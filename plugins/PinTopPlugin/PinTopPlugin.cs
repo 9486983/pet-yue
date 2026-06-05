@@ -1,10 +1,12 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using MyPersonalTool.Sdk;
+using static PinTopPlugin.Win32Native;
+using static PinTopPlugin.Win32Const;
 
 namespace PinTopPlugin;
 
-[Plugin("窗口置顶器", Version = "1.0.0", Description = "Ctrl+Alt+T 置顶/取消置顶当前窗口")]
+[Plugin("窗口置顶器", Version = "1.1.0", Description = "Ctrl+Alt+T 置顶/取消置顶当前窗口，带半透明边框指示")]
 public class PinTopPlugin : PluginBase
 {
     private IPluginHost? _host;
@@ -12,42 +14,18 @@ public class PinTopPlugin : PluginBase
     private IntPtr _msgWnd;
     private int _hotKeyId;
     private readonly HashSet<IntPtr> _pinned = new();
-    private WndProcDelegate? _wndProc;
+    private readonly OverlayManager _overlayMgr;
+    private OverlayConfig _overlayCfg = new();
     private ListDialogConfig? _activeListConfig;
-    private IntPtr _winEventHook;
-    private WinEventDelegate? _winEventDelegate;
-
-    private delegate IntPtr WndProcDelegate(IntPtr h, int m, IntPtr w, IntPtr l);
-    private delegate void WinEventDelegate(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime);
-
-    const int WM_HOTKEY = 0x0312;
-    const uint EVENT_OBJECT_DESTROY = 0x8001;
-    const uint WINEVENT_OUTOFCONTEXT = 0;
-
-    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-    [DllImport("user32.dll")] static extern bool IsWindow(IntPtr h);
-    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr ha, int x, int y, int cx, int cy, uint f);
-    [DllImport("user32.dll")] static extern bool RegisterHotKey(IntPtr h, int id, uint m, uint v);
-    [DllImport("user32.dll")] static extern IntPtr CreateWindowEx(int ex, string cn, string wn, int s, int x, int y, int w, int h, IntPtr p, IntPtr m, IntPtr i, IntPtr d);
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern ushort RegisterClassW(ref WNDCLASSW wc);
-    [DllImport("user32.dll")] static extern IntPtr DefWindowProcW(IntPtr h, int m, IntPtr w, IntPtr l);
-    [DllImport("user32.dll")] static extern int GetMessage(out MSG m, IntPtr h, int f, int t);
-    [DllImport("user32.dll")] static extern bool TranslateMessage(ref MSG m);
-    [DllImport("user32.dll")] static extern IntPtr DispatchMessage(ref MSG m);
-    [DllImport("user32.dll")] static extern bool PostThreadMessage(uint tid, int m, IntPtr w, IntPtr l);
-    [DllImport("kernel32.dll")] static extern IntPtr GetModuleHandle(string? n);
-    [DllImport("user32.dll")] static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmod, WinEventDelegate lpfn, uint idProcess, uint idThread, uint dwFlags);
-    [DllImport("user32.dll")] static extern bool UnhookWinEvent(IntPtr hHook);
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    struct WNDCLASSW { public uint style; public IntPtr lpfnWndProc; public int cbClsExtra; public int cbWndExtra; public IntPtr hInstance; public IntPtr hIcon; public IntPtr hCursor; public IntPtr hbrBackground; public string lpszMenuName; public string lpszClassName; }
-    [StructLayout(LayoutKind.Sequential)]
-    struct MSG { public IntPtr hwnd; public int message; public IntPtr wParam; public IntPtr lParam; public int time; public int pt_x; public int pt_y; }
-
-    const int SWP_NOMOVE = 0x0002, SWP_NOSIZE = 0x0001;
+    private WndProcDelegate? _wndProc;
+    private WndProcDelegate? _overlayWndProc;
 
     public override string Name => "窗口置顶器";
+
+    public PinTopPlugin()
+    {
+        _overlayMgr = new OverlayManager(_pinned);
+    }
 
     public override Task InitializeAsync(IPluginHost host)
     {
@@ -57,6 +35,16 @@ public class PinTopPlugin : PluginBase
                 new() { Key = "pt_enabled", Label = "启用", Type = PluginConfigFieldType.Boolean, DefaultValue = "true" },
                 new() { Key = "pt_modifiers", Label = "快捷键修饰键", Type = PluginConfigFieldType.String, DefaultValue = "Ctrl+Alt" },
                 new() { Key = "pt_key", Label = "快捷键主键", Type = PluginConfigFieldType.String, DefaultValue = "T" },
+                new() { Key = "pt_border_enabled", Label = "显示边框", Type = PluginConfigFieldType.Boolean, DefaultValue = "true" },
+                new() { Key = "pt_border_style", Label = "边框样式", Type = PluginConfigFieldType.Dropdown, DefaultValue = "border",
+                    Options = new() {
+                        new() { Label = "🔲 半透明描边", Value = "border" },
+                        new() { Label = "📌 四角图钉", Value = "corner" },
+                        new() { Label = "💡 系统级闪烁（仅置顶时）", Value = "flash" },
+                    } },
+                new() { Key = "pt_border_color", Label = "边框颜色 (#RRGGBB)", Type = PluginConfigFieldType.String, DefaultValue = "#FFD700" },
+                new() { Key = "pt_border_alpha", Label = "边框透明度 (0-255)", Type = PluginConfigFieldType.Number, DefaultValue = "140", MinValue = 0, MaxValue = 255 },
+                new() { Key = "pt_border_thickness", Label = "边框粗细 (像素)", Type = PluginConfigFieldType.Number, DefaultValue = "3", MinValue = 1, MaxValue = 20 },
             }}, Name);
         host.RegisterAction(new PluginAction { Name = "设置", Emoji = "📌", Group = "📌 窗口置顶器", Target = ActionTarget.ContextMenu,
             Callback = () => { host.ShowConfigDialog("窗口置顶器"); return Task.CompletedTask; } });
@@ -70,6 +58,9 @@ public class PinTopPlugin : PluginBase
             Callback = () => ShowPinnedList(host),
         });
 
+        LoadOverlaySettings();
+        host.ConfigValueChanged += OnConfigChanged;
+
         if (host.GetConfig("pt_enabled") != "false")
         {
             var mod = ParseMod(host.GetConfig("pt_modifiers") ?? "Ctrl+Alt");
@@ -80,16 +71,65 @@ public class PinTopPlugin : PluginBase
         return Task.CompletedTask;
     }
 
+    public override Task CleanupAsync()
+    {
+        if (_host != null) _host.ConfigValueChanged -= OnConfigChanged;
+
+        _overlayMgr.Cleanup();
+
+        foreach (var h in _pinned.ToList())
+            SetWindowPos(h, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        _pinned.Clear();
+
+        if (_pump?.ManagedThreadId > 0)
+            PostThreadMessage((uint)_pump.ManagedThreadId, 0x0012, IntPtr.Zero, IntPtr.Zero);
+        return base.CleanupAsync();
+    }
+
+    // ── 配置 ──
+
+    private void LoadOverlaySettings()
+    {
+        var host = _host;
+        if (host == null) return;
+
+        var hex = (host.GetConfig("pt_border_color") ?? "#FFD700").TrimStart('#');
+        if (uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var rgb))
+        {
+            var r = (rgb >> 16) & 0xFF;
+            var g = (rgb >> 8) & 0xFF;
+            var b = rgb & 0xFF;
+            _overlayCfg.ColorBgr = (b << 16) | (g << 8) | r;
+        }
+        if (byte.TryParse(host.GetConfig("pt_border_alpha") ?? "140", out var a)) _overlayCfg.Alpha = a;
+        if (int.TryParse(host.GetConfig("pt_border_thickness") ?? "3", out var t) && t >= 1) _overlayCfg.Thickness = t;
+    }
+
+    private bool IsBorderEnabled() => (_host?.GetConfig("pt_border_enabled") ?? "true") != "false";
+    private string BorderStyleName() => _host?.GetConfig("pt_border_style") ?? "border";
+
+    private void OnConfigChanged(object? sender, string key)
+    {
+        if (key is not ("pt_border_enabled" or "pt_border_style" or "pt_border_color"
+            or "pt_border_alpha" or "pt_border_thickness")) return;
+
+        LoadOverlaySettings();
+        if (_msgWnd != IntPtr.Zero)
+            PostMessage(_msgWnd, WM_REFRESH_OVERLAYS, IntPtr.Zero, IntPtr.Zero);
+    }
+
+    // ── 消息泵 ──
+
     private void StartPump(uint mod, uint key)
     {
         _hotKeyId = GetHashCode();
         _wndProc = WndProc;
-        _winEventDelegate = OnWindowDestroyed;
-        var host = _host;
-        var pinned = _pinned;
+        _overlayWndProc = OverlayWndProc;
         var cn = $"PinTop_{_hotKeyId}";
+        _overlayMgr.OverlayClassName = $"PinTopOverlay_{_hotKeyId}";
         var hi = GetModuleHandle(null);
         var wndProcPtr = Marshal.GetFunctionPointerForDelegate(_wndProc);
+        var overlayWndProcPtr = Marshal.GetFunctionPointerForDelegate(_overlayWndProc);
 
         _pump = new Thread(() =>
         {
@@ -97,13 +137,26 @@ public class PinTopPlugin : PluginBase
             {
                 var wc = new WNDCLASSW { lpfnWndProc = wndProcPtr, hInstance = hi, lpszClassName = cn };
                 RegisterClassW(ref wc);
-                _msgWnd = CreateWindowEx(0, cn, "", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, hi, IntPtr.Zero);
+                _msgWnd = CreateWindowExW(0, cn, "", 0, 0, 0, 0, 0, IntPtr.Zero, IntPtr.Zero, hi, IntPtr.Zero);
                 if (_msgWnd == IntPtr.Zero) return;
                 RegisterHotKey(_msgWnd, _hotKeyId, mod, key);
 
-                // 监听窗口销毁事件，自动清理已关闭的置顶窗口
-                _winEventHook = SetWinEventHook(EVENT_OBJECT_DESTROY, EVENT_OBJECT_DESTROY,
-                    IntPtr.Zero, _winEventDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
+                // 注册 overlay 窗口类
+                var overlayClass = new WNDCLASSW
+                {
+                    lpfnWndProc = overlayWndProcPtr,
+                    hInstance = hi,
+                    lpszClassName = _overlayMgr.OverlayClassName,
+                };
+                RegisterClassW(ref overlayClass);
+
+                // 注册事件钩子
+                _overlayMgr.RegisterEventHandlers();
+
+                // 初始化 overlay 系统：创建画刷、配置 classname 和 msgWnd
+                _overlayCfg.ClassName = _overlayMgr.OverlayClassName;
+                _overlayCfg.StyleName = BorderStyleName();
+                _overlayMgr.RefreshAll(_overlayCfg, IsBorderEnabled() ? BorderStyleName() : "none", _msgWnd);
 
                 while (GetMessage(out var m, IntPtr.Zero, 0, 0) != 0)
                 {
@@ -124,8 +177,58 @@ public class PinTopPlugin : PluginBase
             catch { }
             return IntPtr.Zero;
         }
+        if (m == WM_REMOVE_OVERLAY)
+        {
+            try { _overlayMgr.Remove(w); }
+            catch { }
+            return IntPtr.Zero;
+        }
+        if (m == WM_UNPIN)
+        {
+            try
+            {
+                SetWindowPos(w, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+                _pinned.Remove(w);
+                _overlayMgr.Remove(w);
+                _host?.ShowThought("📌 已取消", GetTitle(w));
+                _activeListConfig?.NotifyDataChanged();
+            }
+            catch { }
+            return IntPtr.Zero;
+        }
+        if (m == WM_REFRESH_OVERLAYS)
+        {
+            try
+            {
+                var styleName = BorderStyleName();
+                var enabled = IsBorderEnabled();
+                _overlayCfg.StyleName = styleName;
+                _overlayCfg.ClassName = _overlayMgr.OverlayClassName;
+                _overlayMgr.RefreshAll(_overlayCfg, enabled ? styleName : "none", _msgWnd);
+            }
+            catch { }
+            return IntPtr.Zero;
+        }
         return DefWindowProcW(h, m, w, l);
     }
+
+    private IntPtr OverlayWndProc(IntPtr h, int m, IntPtr w, IntPtr l)
+    {
+        if (m == WM_ERASEBKGND)
+        {
+            try
+            {
+                var dc = w;
+                if (GetClientRect(h, out var rc) && _overlayCfg.Brush != IntPtr.Zero)
+                    FillRect(dc, ref rc, _overlayCfg.Brush);
+            }
+            catch { }
+            return new IntPtr(1);
+        }
+        return DefWindowProcW(h, m, w, l);
+    }
+
+    // ── 热键 ──
 
     private void OnHotKey()
     {
@@ -133,31 +236,30 @@ public class PinTopPlugin : PluginBase
         if (hwnd == IntPtr.Zero) return;
 
         var host = _host;
-        var pinned = _pinned;
-        var listConfig = _activeListConfig;
         if (host == null) return;
 
-        if (pinned.Contains(hwnd))
+        if (_pinned.Contains(hwnd))
         {
-            SetWindowPos(hwnd, new IntPtr(-2), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-            pinned.Remove(hwnd);
+            SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            _pinned.Remove(hwnd);
+            _overlayMgr.Remove(hwnd);
             host.ShowThought("📌 已取消", GetTitle(hwnd));
         }
         else
         {
-            SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-            pinned.Add(hwnd);
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            _pinned.Add(hwnd);
+            if (IsBorderEnabled())
+            {
+                _overlayCfg.ClassName = _overlayMgr.OverlayClassName;
+                _overlayMgr.Create(hwnd);
+            }
             host.ShowThought("📌 已置顶", GetTitle(hwnd));
         }
-        listConfig?.NotifyDataChanged();
+        _activeListConfig?.NotifyDataChanged();
     }
 
-    private void OnWindowDestroyed(IntPtr hHook, uint evt, IntPtr hwnd, int idObj, int idChild, uint dwThread, uint dwTime)
-    {
-        if (idObj != 0) return; // 只关心窗口本身
-        if (_pinned.Remove(hwnd))
-            _activeListConfig?.NotifyDataChanged();
-    }
+    // ── 工具 ──
 
     private static string GetTitle(IntPtr h)
     {
@@ -166,16 +268,32 @@ public class PinTopPlugin : PluginBase
         return sb.ToString();
     }
 
+    static uint ParseMod(string s)
+    {
+        uint m = 0;
+        foreach (var p in s.Split('+', StringSplitOptions.TrimEntries))
+            m |= p.ToLowerInvariant() switch { "ctrl" => 0x0002u, "alt" => 0x0001u, "shift" => 0x0004u, "win" => 0x0008u, _ => 0 };
+        return m;
+    }
+
+    static uint ParseKey(string s)
+    {
+        s = s.Trim().ToUpperInvariant();
+        if (s.Length == 1 && s[0] >= 'A' && s[0] <= 'Z') return (uint)s[0];
+        return 0x54u;
+    }
+
+    // ── 列表弹窗 ──
+
     private async Task ShowPinnedList(IPluginHost host)
     {
-        var pinned = _pinned;
-        if (pinned.Count == 0)
+        if (_pinned.Count == 0)
         {
             host.ShowThought("📌 置顶列表", "暂无已置顶的窗口");
             return;
         }
 
-        if (_activeListConfig != null) return; // 已打开
+        if (_activeListConfig != null) return;
 
         var config = new ListDialogConfig
         {
@@ -183,10 +301,13 @@ public class PinTopPlugin : PluginBase
             Emoji = "📌",
             DataSource = () =>
             {
-                var valid = pinned.Where(IsWindow).ToList();
-                foreach (var h in pinned.Except(valid).ToList())
-                    pinned.Remove(h);
-
+                var valid = _pinned.Where(IsWindow).ToList();
+                foreach (var h in _pinned.Except(valid).ToList())
+                {
+                    _pinned.Remove(h);
+                    if (_msgWnd != IntPtr.Zero)
+                        PostMessage(_msgWnd, WM_REMOVE_OVERLAY, h, IntPtr.Zero);
+                }
                 return Task.FromResult(valid.Select(h => new Dictionary<string, string>
                 {
                     { "hwnd", h.ToString() },
@@ -207,12 +328,8 @@ public class PinTopPlugin : PluginBase
                             Label = "取消", Emoji = "🔓",
                             Callback = row =>
                             {
-                                if (IntPtr.TryParse(row["hwnd"], out var h))
-                                {
-                                    SetWindowPos(h, new IntPtr(-2), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-                                    pinned.Remove(h);
-                                    host.ShowThought("📌 已取消", GetTitle(h));
-                                }
+                                if (IntPtr.TryParse(row["hwnd"], out var h) && _msgWnd != IntPtr.Zero)
+                                    PostMessage(_msgWnd, WM_UNPIN, h, IntPtr.Zero);
                                 return Task.CompletedTask;
                             },
                         },
@@ -224,20 +341,5 @@ public class PinTopPlugin : PluginBase
         _activeListConfig = config;
         await host.ShowListDialog(config);
         _activeListConfig = null;
-    }
-
-    static uint ParseMod(string s) { uint m = 0; foreach (var p in s.Split('+', StringSplitOptions.TrimEntries)) m |= p.ToLowerInvariant() switch { "ctrl" => 0x0002u, "alt" => 0x0001u, "shift" => 0x0004u, "win" => 0x0008u, _ => 0 }; return m; }
-    static uint ParseKey(string s) { s = s.Trim().ToUpperInvariant(); if (s.Length == 1 && s[0] >= 'A' && s[0] <= 'Z') return (uint)s[0]; return 0x54u; }
-
-    public override Task CleanupAsync()
-    {
-        if (_winEventHook != IntPtr.Zero)
-            UnhookWinEvent(_winEventHook);
-        foreach (var h in _pinned.ToList())
-            SetWindowPos(h, new IntPtr(-2), 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        _pinned.Clear();
-        if (_pump?.ManagedThreadId > 0)
-            PostThreadMessage((uint)_pump.ManagedThreadId, 0x0012, IntPtr.Zero, IntPtr.Zero);
-        return base.CleanupAsync();
     }
 }

@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace MyPersonalTool.Sdk;
 
 /// <summary>插件基类 —— 提供默认实现，插件可继承此类简化开发</summary>
@@ -5,7 +7,7 @@ public abstract class PluginBase : IPlugin
 {
     public abstract string Name { get; }
     public virtual string Version => "1.0.0";
-    public virtual string Description => "";
+    public virtual string Description => GetType().GetCustomAttribute<PluginAttribute>()?.Description ?? "";
 
     protected IPluginHost? Host { get; private set; }
 

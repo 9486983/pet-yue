@@ -1,6 +1,5 @@
-using System.Text;
-using System.Text.Json;
 using MyPersonalTool.Sdk;
+using System.Text.Json;
 
 namespace DeepSeekPlugin;
 
@@ -104,16 +103,6 @@ public class DeepSeekQueryPlugin : PluginBase
             Callback = async () => await QueryBalance(),
         });
 
-        host.RegisterAction(new PluginAction
-        {
-            Name = "缓存命中测试",
-            Emoji = "⚡",
-            Description = "发送两次请求对比缓存命中率",
-            Group = "🔑 DeepSeek",
-            Target = ActionTarget.ContextMenu,
-            Callback = async () => await TestCache(),
-        });
-
         // ── 启动定时查询（如果已启用） ──
         RestartTimerIfNeeded();
 
@@ -213,9 +202,9 @@ public class DeepSeekQueryPlugin : PluginBase
             }
 
             var status = isAvailable ? "✅ 可用" : "❌ 不可用";
-            var title = silent ? $"💰 ¥{balance}" : "💰 DeepSeek 余额";
+            var title = "💰 DeepSeek 余额";
             _host.ShowThought(title, $"{status}\n💰 余额: ¥{balance}");
-            _host.ShowReaction(silent ? "💹" : "💰");
+            _host.ShowReaction("💰");
         }
         catch (HttpRequestException ex)
         {
@@ -230,102 +219,9 @@ public class DeepSeekQueryPlugin : PluginBase
         }
     }
 
-    // ── 缓存测试 ──
-
-    private async Task TestCache()
-    {
-        if (_host == null) return;
-        var apiKey = GetApiKey();
-
-        if (string.IsNullOrEmpty(apiKey))
-        {
-            _host.ShowThought("⚠️ 未配置", "请在设置页 → DeepSeek API 中填写 API Key");
-            return;
-        }
-
-        try
-        {
-            _host.ShowThought("⚡ 缓存测试", "正在发送第 1 次请求…");
-
-            var body = JsonSerializer.Serialize(new
-            {
-                model = "deepseek-chat",
-                messages = new[] { new { role = "user", content = "Hello" } },
-                max_tokens = 1
-            });
-
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}");
-            var content = new StringContent(body, Encoding.UTF8, "application/json");
-
-            var resp1 = await client.PostAsync(ChatUrl, content);
-            var json1 = await resp1.Content.ReadAsStringAsync();
-            var usage1 = ParseUsage(json1);
-
-            _host.ShowThought("⚡ 缓存测试", "第 1 次请求完成，正在发送第 2 次…");
-
-            var resp2 = await client.PostAsync(ChatUrl, content);
-            var json2 = await resp2.Content.ReadAsStringAsync();
-            var usage2 = ParseUsage(json2);
-
-            var hitRate1 = usage1.TotalInput > 0
-                ? (double)usage1.CacheHit / usage1.TotalInput * 100 : 0;
-            var hitRate2 = usage2.TotalInput > 0
-                ? (double)usage2.CacheHit / usage2.TotalInput * 100 : 0;
-
-            var msg = $"【第 1 次请求】\n" +
-                      $"  输入 tokens: {usage1.TotalInput}\n" +
-                      $"  缓存命中: {usage1.CacheHit}\n" +
-                      $"  缓存未命中: {usage1.CacheMiss}\n" +
-                      $"  命中率: {hitRate1:F1}%\n\n" +
-                      $"【第 2 次请求（相同前缀）】\n" +
-                      $"  输入 tokens: {usage2.TotalInput}\n" +
-                      $"  缓存命中: {usage2.CacheHit}\n" +
-                      $"  缓存未命中: {usage2.CacheMiss}\n" +
-                      $"  命中率: {hitRate2:F1}%\n\n" +
-                      $"💡 第 2 次命中率应明显高于第 1 次\n" +
-                      $"（前提是两次请求在缓存 TTL 内）";
-
-            _host.ShowThought("⚡ DeepSeek 缓存测试", msg);
-            _host.ShowReaction("⚡");
-        }
-        catch (HttpRequestException ex)
-        {
-            _host.ShowThought("❌ 测试失败",
-                $"网络错误: {ex.Message}\n\n请检查 API Key 是否正确");
-        }
-        catch (Exception ex)
-        {
-            _host.ShowThought("❌ 测试失败", ex.Message);
-        }
-    }
-
-    private static UsageInfo ParseUsage(string json)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var usage = doc.RootElement.GetProperty("usage");
-            var hit = usage.TryGetProperty("prompt_cache_hit_tokens", out var h) ? h.GetInt64() : 0;
-            var miss = usage.TryGetProperty("prompt_cache_miss_tokens", out var m) ? m.GetInt64() : 0;
-            var input = usage.TryGetProperty("prompt_tokens", out var p) ? p.GetInt64() : 0;
-            var output = usage.TryGetProperty("completion_tokens", out var c) ? c.GetInt64() : 0;
-            return new UsageInfo(input, output, hit, miss);
-        }
-        catch
-        {
-            return new UsageInfo(0, 0, 0, 0);
-        }
-    }
-
     public override Task CleanupAsync()
     {
         StopTimer();
         return base.CleanupAsync();
-    }
-
-    private record UsageInfo(long Input, long Output, long CacheHit, long CacheMiss)
-    {
-        public long TotalInput => CacheHit + CacheMiss;
     }
 }

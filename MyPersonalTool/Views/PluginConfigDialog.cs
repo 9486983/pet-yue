@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -77,6 +76,54 @@ public static class PluginConfigDialog
 
                 case PluginConfigFieldType.Number:
                 {
+                    // 有 Min/Max 范围 → 滑块；否则文本输入
+                    if (field.MinValue.HasValue && field.MaxValue.HasValue
+                        && field.MaxValue.Value > field.MinValue.Value)
+                    {
+                        double initial = double.TryParse(currentValue, out var v) ? v : field.MinValue.Value;
+                        initial = Math.Clamp(initial, field.MinValue.Value, field.MaxValue.Value);
+
+                        var valueText = new TextBlock
+                        {
+                            Text = ((int)initial).ToString(),
+                            FontSize = 12,
+                            MinWidth = 36,
+                            Foreground = new SolidColorBrush(fgColor),
+                            VerticalAlignment = VerticalAlignment.Center,
+                            HorizontalAlignment = HorizontalAlignment.Right,
+                        };
+                        var slider = new Slider
+                        {
+                            Minimum = field.MinValue.Value,
+                            Maximum = field.MaxValue.Value,
+                            Value = initial,
+                            Width = 160,
+                            VerticalAlignment = VerticalAlignment.Center,
+                        };
+                        editedValue = ((int)initial).ToString();
+                        slider.PropertyChanged += (_, e) =>
+                        {
+                            if (e.Property == Slider.ValueProperty)
+                            {
+                                var iv = (int)Math.Round(slider.Value);
+                                valueText.Text = iv.ToString();
+                                editedValue = iv.ToString();
+                            }
+                        };
+
+                        var sliderRow = new StackPanel
+                        {
+                            Orientation = Orientation.Horizontal,
+                            Spacing = 8,
+                            HorizontalAlignment = HorizontalAlignment.Right,
+                            Children = { slider, valueText },
+                        };
+                        input = sliderRow;
+                        // 通过 Tag 让保存逻辑识别滑块的值
+                        sliderRow.Tag = slider;
+                        break;
+                    }
+
                     var tb = new TextBox
                     {
                         Text = currentValue,
@@ -246,11 +293,12 @@ public static class PluginConfigDialog
             var changed = new Dictionary<string, string?>();
             foreach (var (field, ctrl) in fieldControls)
             {
-                var newVal = ctrl switch
+                string? newVal = ctrl switch
                 {
                     TextBox tb => tb.Text,
                     ToggleSwitch ts => ts.IsChecked == true ? "true" : "false",
                     ComboBox cb => (cb.SelectedItem as PluginConfigOption)?.Value,
+                    StackPanel sp when sp.Tag is Slider sl => ((int)Math.Round(sl.Value)).ToString(),
                     _ => null,
                 };
                 var oldVal = getValue(field.Key) ?? field.DefaultValue ?? "";
