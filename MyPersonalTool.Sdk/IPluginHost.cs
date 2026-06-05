@@ -66,6 +66,9 @@ public interface IPluginHost
     /// <summary>弹出确认对话框（气泡样式），返回 true=确认 false=取消</summary>
     Task<bool> ShowConfirmDialog(string title, string text);
 
+    /// <summary>弹出列表弹窗（气泡样式），支持自定义数据、操作列、编辑、工具栏</summary>
+    Task ShowListDialog(ListDialogConfig config);
+
     /// <summary>获取/设置插件配置值（保存在主程序配置中）</summary>
     string? GetConfig(string key);
     void SetConfig(string key, string value);

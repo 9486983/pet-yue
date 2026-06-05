@@ -64,6 +64,9 @@ public class PluginHostImpl : IPluginHost
     /// <summary>确认框回调</summary>
     public Func<string, string, Task<bool>>? OnShowConfirmDialog { get; set; }
 
+    /// <summary>列表弹窗回调</summary>
+    public Func<ListDialogConfig, Task>? OnShowListDialog { get; set; }
+
     /// <summary>日志输出</summary>
     public event Action<string>? LogEmitted;
 
@@ -281,6 +284,13 @@ public class PluginHostImpl : IPluginHost
         if (OnShowConfirmDialog != null)
             return OnShowConfirmDialog(title, text);
         return Task.FromResult(false);
+    }
+
+    public Task ShowListDialog(ListDialogConfig config)
+    {
+        if (OnShowListDialog != null)
+            return OnShowListDialog(config);
+        return Task.CompletedTask;
     }
 
     public string? GetConfig(string key) => _config.GetPluginValue(key);
